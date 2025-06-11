@@ -132,7 +132,7 @@ export default function PackagesPage() {
               variant={viewMode === "cards" ? "default" : "ghost"}
               size="sm"
               onClick={() => setViewMode("cards")}
-              className={viewMode === "cards" ? "bg-blue-600 hover:bg-blue-700" : ""}
+              className={viewMode === "cards" ? "bg-gray-900 hover:bg-black" : ""}
             >
               Cards
             </Button>
@@ -140,14 +140,14 @@ export default function PackagesPage() {
               variant={viewMode === "table" ? "default" : "ghost"}
               size="sm"
               onClick={() => setViewMode("table")}
-              className={viewMode === "table" ? "bg-blue-600 hover:bg-blue-700" : ""}
+              className={viewMode === "table" ? "bg-gray-900 hover:bg-black" : ""}
             >
               Table
             </Button>
           </div>
-          <Button onClick={() => setShowCreateModal(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={() => setShowCreateModal(true)} className="bg-teal-600 hover:bg-teal-700">
             <Plus className="mr-2 h-4 w-4" />
-            Create Plan
+            Add Plan
           </Button>
         </div>
       </div>
@@ -230,7 +230,7 @@ export default function PackagesPage() {
       {viewMode === "cards" ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredPlans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} onEdit={() => {}} onDelete={() => {}} />
+            <PlanCard key={plan.id} plan={plan} onEdit={() => { }} onDelete={() => { }} />
           ))}
         </div>
       ) : (

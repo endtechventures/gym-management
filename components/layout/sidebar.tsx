@@ -92,12 +92,12 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
     {
       name: "Operations",
       items: [
-        { name: "Check-in", href: "/dashboard/checkin", icon: UserCheck, comingSoon: true },
-        { name: "Billing", href: "/dashboard/billing", icon: CreditCard, comingSoon: true },
+        // { name: "Check-in", href: "/dashboard/checkin", icon: UserCheck, comingSoon: true },
+        // { name: "Billing", href: "/dashboard/billing", icon: CreditCard, comingSoon: true },
         { name: "Payments", href: "/dashboard/payments", icon: Receipt },
-        { name: "Scheduling", href: "/dashboard/scheduling", icon: Calendar, comingSoon: true },
+        // { name: "Scheduling", href: "/dashboard/scheduling", icon: Calendar, comingSoon: true },
         { name: "Packages", href: "/dashboard/packages", icon: Package },
-        { name: "POS & Inventory", href: "/dashboard/pos", icon: Store, comingSoon: true },
+        // { name: "POS & Inventory", href: "/dashboard/pos", icon: Store, comingSoon: true },
       ],
     },
     {
@@ -111,14 +111,14 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
       name: "Analytics & Security",
       items: [
         { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
-        { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
-        { name: "Access Control", href: "/dashboard/access", icon: Shield, comingSoon: true },
+        // { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
+        // { name: "Access Control", href: "/dashboard/access", icon: Shield, comingSoon: true },
       ],
     },
     {
       name: "Support",
       items: [
-        { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: HelpCircle },
+        // { name: "Knowledge Base", href: "/dashboard/knowledge-base", icon: HelpCircle },
         { name: "Settings", href: "/dashboard/settings", icon: Settings },
       ],
     },

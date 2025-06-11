@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, Edit, Trash2, Eye, Users, DollarSign, MapPin, Loader2, Plus, Store } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Users, DollarSign, MapPin, Loader2, Plus, Store, CreditCard, ExternalLink, MoreHorizontal } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { EditFranchiseModal } from "@/components/franchises/edit-franchise-modal"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase"
 import { useGymContext } from "@/lib/gym-context"
 import { getCurrencySymbol } from "@/lib/currency"
 import { toast } from "@/components/ui/use-toast"
+import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface Franchise {
   id: string
@@ -401,31 +402,32 @@ export default function FranchisesPage() {
       accessorKey: "revenue",
       cell: ({ row }: any) => (
         <div className="flex items-center space-x-1">
-          <DollarSign className="h-4 w-4 text-gray-400" />
+          {/* <DollarSign className="h-4 w-4 text-gray-400" /> */}
           <span>{getCurrencySymbol()}{row.original.revenue.toLocaleString()}</span>
         </div>
       ),
     },
     {
       header: "Actions",
+      id: "actions",
       cell: ({ row }: any) => (
-        <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="sm" title="View Details">
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" title="Edit Franchise" onClick={() => handleEditFranchise(row.original)}>
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-red-600"
-            title="Delete Franchise"
-            onClick={() => handleDeleteFranchise(row.original.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleEditFranchise(row.original)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDeleteFranchise(row.original.id)} className="text-red-600">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
   ]
@@ -477,7 +479,7 @@ export default function FranchisesPage() {
               Table
             </Button>
           </div>
-          <Button onClick={() => setShowCreateModal(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={() => setShowCreateModal(true)} className="bg-teal-600 hover:bg-teal-700">
             <Plus className="mr-2 h-4 w-4" />
             Add Franchise
           </Button>

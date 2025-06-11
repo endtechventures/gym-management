@@ -316,28 +316,7 @@ export default function StaffPage() {
       accessorKey: "created_at",
       cell: ({ row }: any) =>
         row.original.created_at ? new Date(row.original.created_at).toLocaleDateString() : "N/A",
-    },
-    {
-      header: "Actions",
-      cell: ({ row }: any) => (
-        <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="sm">
-            <Eye className="h-4 w-4" />
-          </Button>
-          {row.original.type === "trainer" && (
-            <Button variant="ghost" size="sm">
-              <Calendar className="h-4 w-4" />
-            </Button>
-          )}
-          <Button variant="ghost" size="sm">
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="text-red-600">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
+    }
   ]
 
   if (loading) {
@@ -363,7 +342,7 @@ export default function StaffPage() {
           <p className="text-gray-600">Manage your gym staff, trainers, and team members</p>
         </div>
         <div className="flex items-center space-x-3">
-          <Button onClick={() => setShowInviteModal(true)} className="bg-indigo-600 hover:bg-indigo-700">
+          <Button onClick={() => setShowInviteModal(true)} className="bg-teal-600 hover:bg-teal-700">
             <Plus className="mr-2 h-4 w-4" />
             Invite Staff
           </Button>
