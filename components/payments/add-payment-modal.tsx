@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useGymContext } from "@/lib/gym-context"
 import { getMembers, getPlans, getPaymentMethods, createPayment } from "@/lib/supabase-queries"
 import type { Member, Plan, PaymentMethod } from "@/types/database"
+import { formatCurrency, getCurrencySymbol } from "@/lib/currency"
 
 interface AddPaymentModalProps {
   open: boolean
@@ -219,7 +220,7 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
                 <p className="text-sm text-gray-600 mb-2">{selectedPlan.description}</p>
                 <div className="flex justify-between items-center">
                   <span>Base Price:</span>
-                  <span className="font-bold text-green-600">${selectedPlan.price}</span>
+                  <span className="font-bold text-green-600">{formatCurrency(selectedPlan.price)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span>Duration:</span>
@@ -235,7 +236,7 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="baseAmount">Base Amount</Label>
+                <Label htmlFor="amount">Payment Amount ({getCurrencySymbol()}) *</Label>
                 <Input
                   id="baseAmount"
                   type="number"
@@ -272,7 +273,7 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="discount">Discount {discountType === "percentage" ? "(%)" : "($)"}</Label>
+                  <Label htmlFor="discount">Discount ({getCurrencySymbol()})</Label>
                   <Input
                     id="discount"
                     type="number"
@@ -289,7 +290,7 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
                   />
                 </div>
                 <div>
-                  <Label htmlFor="finalAmount">Final Amount</Label>
+                  <Label htmlFor="finalAmount">Final Amount ({getCurrencySymbol()}) *</Label>
                   <Input
                     id="finalAmount"
                     type="number"
@@ -335,15 +336,15 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span>Base Amount:</span>
-                <span>${paymentData.base_amount || "0.00"}</span>
+                <span>{formatCurrency(paymentData.base_amount || "0")}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Discount:</span>
-                <span className="text-red-600">-${paymentData.discount_amount || "0.00"}</span>
+                <span className="text-red-600">-{formatCurrency(paymentData.discount_amount || "0")}</span>
               </div>
               <div className="flex justify-between items-center font-bold text-lg">
                 <span>Final Amount:</span>
-                <span className="text-green-600">${paymentData.final_amount || "0.00"}</span>
+                <span className="text-green-600">{formatCurrency(paymentData.final_amount || "0")}</span>
               </div>
             </div>
           </div>

@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export default function AddAssignmentModal({ open, onClose, onSuccess }) {
   const { currentSubaccountId } = useGymContext()
@@ -21,18 +24,48 @@ export default function AddAssignmentModal({ open, onClose, onSuccess }) {
     notes: "",
   })
 
+  const [memberSearchOpen, setMemberSearchOpen] = useState(false)
+  const [memberSearchValue, setMemberSearchValue] = useState("")
+  const [memberPage, setMemberPage] = useState(1)
+  const [loadingMoreMembers, setLoadingMoreMembers] = useState(false)
+  const [hasMoreMembers, setHasMoreMembers] = useState(true)
+  const [searchError, setSearchError] = useState(false)
+  const MEMBERS_PER_PAGE = 20
+
+  // Debug state to track search issues
+  const [debugInfo, setDebugInfo] = useState({
+    lastSearch: "",
+    resultsCount: 0,
+    searchAttempts: 0,
+  })
+
   useEffect(() => {
     if (open && currentSubaccountId) {
       loadTrainers()
-      loadMembers()
+      loadInitialMembers()
+      setMemberPage(1)
+      setMemberSearchValue("")
+      setHasMoreMembers(true)
+      setSearchError(false)
       // Reset form
       setFormData({
         trainer_id: "",
         member_id: "",
         notes: "",
       })
+      // Reset debug info
+      setDebugInfo({
+        lastSearch: "",
+        resultsCount: 0,
+        searchAttempts: 0,
+      })
     }
   }, [open, currentSubaccountId])
+
+  const loadInitialMembers = () => {
+    setLoadingMoreMembers(true)
+    loadMembers(1, "")
+  }
 
   const loadTrainers = async () => {
     try {
@@ -128,31 +161,105 @@ export default function AddAssignmentModal({ open, onClose, onSuccess }) {
     }
   }
 
-  const loadMembers = async () => {
+  const loadMembers = async (page = 1, searchQuery = "") => {
     try {
-      console.log("Loading members for subaccount:", currentSubaccountId)
+      setSearchError(false)
+      console.log(`Loading members for subaccount: ${currentSubaccountId}, page: ${page}, search: "${searchQuery}"`)
 
-      const { data, error } = await supabase
+      // Update debug info
+      setDebugInfo((prev) => ({
+        lastSearch: searchQuery,
+        resultsCount: prev.resultsCount,
+        searchAttempts: prev.searchAttempts + 1,
+      }))
+
+      const isFirstPage = page === 1
+
+      if (isFirstPage) {
+        setLoadingMoreMembers(true)
+        // Don't clear members here to prevent flashing
+      }
+
+      const query = supabase
         .from("members")
         .select("id, name, email")
         .eq("subaccount_id", currentSubaccountId)
         .eq("is_active", true)
         .order("name")
+        .range((page - 1) * MEMBERS_PER_PAGE, page * MEMBERS_PER_PAGE - 1)
 
-      if (error) throw error
+      // Fix: Use ilike with % on both sides for partial matching
+      if (searchQuery && searchQuery.trim()) {
+        const trimmedSearch = searchQuery.trim().toLowerCase()
+        query.or(`name.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%`)
+      }
 
-      console.log("Loaded members for modal:", data)
-      setMembers(data || [])
+      const { data, error } = await query
+
+      if (error) {
+        console.error("Error in search query:", error)
+        throw error
+      }
+
+      console.log(`Loaded ${data?.length || 0} members for page ${page}, search: "${searchQuery}"`)
+
+      // Update debug info with results
+      setDebugInfo((prev) => ({
+        ...prev,
+        resultsCount: data?.length || 0,
+      }))
+
+      if (isFirstPage) {
+        setMembers(data || [])
+      } else {
+        setMembers((prev) => [...prev, ...(data || [])])
+      }
+
+      setHasMoreMembers((data?.length || 0) === MEMBERS_PER_PAGE)
     } catch (error) {
       console.error("Error loading members:", error)
+      setSearchError(true)
       toast({
         title: "Error",
         description: "Failed to load members",
         variant: "destructive",
       })
-      setMembers([])
+      if (page === 1) {
+        setMembers([])
+      }
+    } finally {
+      setLoadingMoreMembers(false)
     }
   }
+
+  const loadMoreMembers = async () => {
+    if (!loadingMoreMembers && hasMoreMembers) {
+      const nextPage = memberPage + 1
+      setMemberPage(nextPage)
+      setLoadingMoreMembers(true)
+      await loadMembers(nextPage, memberSearchValue)
+    }
+  }
+
+  // Debounced search
+  useEffect(() => {
+    if (currentSubaccountId && memberSearchOpen) {
+      const timeoutId = setTimeout(() => {
+        console.log("Searching for:", memberSearchValue)
+        loadMembers(1, memberSearchValue)
+        setMemberPage(1)
+      }, 300)
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [memberSearchValue, currentSubaccountId, memberSearchOpen])
+
+  // Load members when dropdown opens
+  useEffect(() => {
+    if (memberSearchOpen && members.length === 0 && !loadingMoreMembers) {
+      loadInitialMembers()
+    }
+  }, [memberSearchOpen, members.length, loadingMoreMembers])
 
   const handleChange = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
@@ -293,19 +400,107 @@ export default function AddAssignmentModal({ open, onClose, onSuccess }) {
 
           <div className="space-y-2">
             <Label htmlFor="member_id">Member *</Label>
-            <Select value={formData.member_id} onValueChange={(value) => handleChange("member_id", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select member" />
-              </SelectTrigger>
-              <SelectContent>
-                {members.map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {member.name} ({member.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {members.length === 0 && (
+            <Popover open={memberSearchOpen} onOpenChange={setMemberSearchOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={memberSearchOpen}
+                  className="w-full justify-between"
+                >
+                  {formData.member_id
+                    ? members.find((member) => member.id === formData.member_id)?.name || "Select member"
+                    : "Select member"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={5}>
+                <div className="h-[350px] flex flex-col">
+                  <div className="flex items-center border-b px-3 py-2">
+                    <input
+                      className="flex h-9 w-full rounded-md bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder="Search members..."
+                      value={memberSearchValue}
+                      onChange={(e) => setMemberSearchValue(e.target.value)}
+                    />
+                    {loadingMoreMembers && <Loader2 className="h-4 w-4 animate-spin opacity-70 ml-2" />}
+                  </div>
+
+                  <div
+                    className="flex-1 overflow-y-scroll overscroll-contain"
+                    style={{
+                      WebkitOverflowScrolling: "touch",
+                      scrollbarWidth: "thin",
+                      height: "calc(100% - 53px)",
+                    }}
+                    onWheel={(e) => {
+                      e.stopPropagation()
+                    }}
+                  >
+                    {loadingMoreMembers ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="flex flex-col items-center">
+                          <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                          <p className="text-sm text-gray-500">Loading members...</p>
+                        </div>
+                      </div>
+                    ) : members.length === 0 ? (
+                      <div className="flex items-center justify-center py-8">
+                        <p className="text-sm text-gray-500">
+                          {searchError
+                            ? "Error loading members. Please try again."
+                            : memberSearchValue
+                              ? "No members match your search."
+                              : "No members found."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="py-1">
+                        {members.map((member) => (
+                          <div
+                            key={member.id}
+                            className={cn(
+                              "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                              formData.member_id === member.id ? "bg-accent text-accent-foreground" : "",
+                            )}
+                            onClick={() => {
+                              handleChange("member_id", member.id === formData.member_id ? "" : member.id)
+                              setMemberSearchOpen(false)
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.member_id === member.id ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{member.name}</span>
+                              <span className="text-xs text-gray-500">{member.email}</span>
+                            </div>
+                          </div>
+                        ))}
+
+                        {hasMoreMembers && (
+                          <div className="px-2 py-2 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={loadMoreMembers}
+                              disabled={loadingMoreMembers}
+                              className="w-full text-xs"
+                            >
+                              Load more members
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {members.length === 0 && !loadingMoreMembers && (
               <p className="text-sm text-gray-500">No active members found. Please add members first.</p>
             )}
             <p className="text-xs text-gray-400">Selected member ID: {formData.member_id || "None"}</p>

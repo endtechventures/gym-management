@@ -13,6 +13,7 @@ import { useGymContext } from "@/lib/gym-context"
 import { getPaymentMethods, createPayment, updateMember, getMemberPayments } from "@/lib/supabase-queries"
 import type { Member, Plan, PaymentMethod, Payment } from "@/types/database"
 import { Calendar, DollarSign } from "lucide-react"
+import { formatCurrency, getCurrencySymbol } from "@/lib/currency"
 
 interface MarkPaymentDoneModalProps {
   open: boolean
@@ -193,7 +194,7 @@ export function MarkPaymentDoneModal({
               {lastPayment && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Last Payment:</span>
-                  <span className="font-medium text-green-600">${lastPayment.final_amount}</span>
+                  <span className="font-medium text-green-600">{formatCurrency(lastPayment.final_amount)}</span>
                 </div>
               )}
             </CardContent>
@@ -202,7 +203,7 @@ export function MarkPaymentDoneModal({
           {/* Payment Details Form */}
           <div className="space-y-4">
             <div>
-              <Label htmlFor="amount">Payment Amount *</Label>
+              <Label htmlFor="amount">Payment Amount ({getCurrencySymbol()}) *</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -227,7 +228,7 @@ export function MarkPaymentDoneModal({
             </div>
 
             <div>
-              <Label htmlFor="discount">Discount</Label>
+              <Label htmlFor="discount">Discount ({getCurrencySymbol()})</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -252,7 +253,7 @@ export function MarkPaymentDoneModal({
             </div>
 
             <div>
-              <Label htmlFor="finalAmount">Final Amount *</Label>
+              <Label htmlFor="finalAmount">Final Amount ({getCurrencySymbol()}) *</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -308,15 +309,15 @@ export function MarkPaymentDoneModal({
               </div>
               <div className="flex justify-between">
                 <span>Amount:</span>
-                <span className="font-medium">${paymentData.amount || "0.00"}</span>
+                <span>{formatCurrency(paymentData.amount || "0")}</span>
               </div>
               <div className="flex justify-between">
                 <span>Discount:</span>
-                <span className="font-medium text-red-600">-${paymentData.discount || "0.00"}</span>
+                <span className="font-medium text-red-600">-{formatCurrency(paymentData.discount || "0")}</span>
               </div>
               <div className="flex justify-between">
                 <span>Final Amount:</span>
-                <span className="font-medium text-green-600">${paymentData.final_amount || "0.00"}</span>
+                <span className="font-medium text-green-600">{formatCurrency(paymentData.final_amount || "0")}</span>
               </div>
               <div className="flex justify-between">
                 <span>New Next Payment Due:</span>

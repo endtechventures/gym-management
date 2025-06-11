@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
 import AddExpenseModal from "@/components/expenses/add-expense-modal"
 import EditExpenseModal from "@/components/expenses/edit-expense-modal"
+import { formatCurrency } from "@/lib/currency"
 
 const LoadingSkeleton = () => (
   <div className="space-y-6 p-6">
@@ -324,11 +325,8 @@ export default function ExpensesPage() {
     }
   }
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount || 0)
+  const formatCurrencyAmount = (amount) => {
+    return formatCurrency(amount || 0)
   }
 
   const handleRetry = () => {
@@ -367,7 +365,7 @@ export default function ExpensesPage() {
     {
       accessorKey: "amount",
       header: "Amount",
-      cell: ({ row }) => <div className="font-medium">{formatCurrency(row.original.amount)}</div>,
+      cell: ({ row }) => <div className="font-medium">{formatCurrencyAmount(row.original.amount)}</div>,
     },
     {
       accessorKey: "expense_type",
@@ -484,7 +482,7 @@ export default function ExpensesPage() {
             <CardTitle className="text-lg font-medium">Total Expenses</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(totalAmount)}</div>
+            <div className="text-3xl font-bold">{formatCurrencyAmount(totalAmount)}</div>
             <div className="text-sm text-muted-foreground mt-1">All time</div>
           </CardContent>
         </Card>
@@ -494,7 +492,7 @@ export default function ExpensesPage() {
             <CardTitle className="text-lg font-medium">This Month</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(monthlyTotal)}</div>
+            <div className="text-3xl font-bold">{formatCurrencyAmount(monthlyTotal)}</div>
             <div className="text-sm text-muted-foreground mt-1">Current month expenses</div>
           </CardContent>
         </Card>

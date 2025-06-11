@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
+import { getCurrencySymbol } from "@/lib/currency"
 
 const EXPENSE_TYPES = ["maintenance", "rent", "utility", "equipment", "marketing", "salary", "insurance", "other"]
 
@@ -150,7 +151,7 @@ export default function EditExpenseModal({ open, onClose, onSuccess, expense }) 
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amount">Amount *</Label>
+              <Label htmlFor="amount">Amount ({getCurrencySymbol()}) *</Label>
               <Input
                 id="amount"
                 name="amount"

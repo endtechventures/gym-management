@@ -25,6 +25,7 @@ import { useGymContext } from "@/lib/gym-context"
 import { getPayments } from "@/lib/supabase-queries"
 import type { Payment } from "@/types/database"
 import { DashboardSkeleton } from "@/components/dashboard/skeleton-loader"
+import { formatCurrency } from "@/lib/currency"
 
 export default function PaymentsPage() {
   const { currentSubaccountId, isLoading: contextLoading } = useGymContext()
@@ -81,9 +82,9 @@ export default function PaymentsPage() {
         [
           payment.member?.name || "",
           payment.plan?.name || "",
-          payment.amount,
-          payment.discount,
-          payment.final_amount,
+          formatCurrency(payment.amount),
+          formatCurrency(payment.discount),
+          formatCurrency(payment.final_amount),
           payment.payment_method?.name || "",
           new Date(payment.paid_at).toLocaleDateString(),
           payment.notes || "",
@@ -120,17 +121,19 @@ export default function PaymentsPage() {
     {
       header: "Base Amount",
       accessorKey: "amount",
-      cell: ({ row }: any) => <span className="font-medium">${row.original.amount}</span>,
+      cell: ({ row }: any) => <span className="font-medium">{formatCurrency(row.original.amount)}</span>,
     },
     {
       header: "Discount",
       accessorKey: "discount",
-      cell: ({ row }: any) => <span className="text-red-600">-${row.original.discount}</span>,
+      cell: ({ row }: any) => <span className="text-red-600">-{formatCurrency(row.original.discount)}</span>,
     },
     {
       header: "Final Amount",
       accessorKey: "final_amount",
-      cell: ({ row }: any) => <span className="font-medium text-green-600">${row.original.final_amount}</span>,
+      cell: ({ row }: any) => (
+        <span className="font-medium text-green-600">{formatCurrency(row.original.final_amount)}</span>
+      ),
     },
     {
       header: "Payment Method",
@@ -225,7 +228,7 @@ export default function PaymentsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">${totalRevenue.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
               </div>
               <div className="p-3 rounded-2xl bg-green-100 text-green-600">
                 <DollarSign className="h-5 w-5" />
@@ -239,7 +242,7 @@ export default function PaymentsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">This Month</p>
-                <p className="text-2xl font-bold text-gray-900">${thisMonthRevenue.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(thisMonthRevenue)}</p>
               </div>
               <div className="p-3 rounded-2xl bg-blue-100 text-blue-600">
                 <TrendingUp className="h-5 w-5" />
@@ -267,7 +270,7 @@ export default function PaymentsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Discounts</p>
-                <p className="text-2xl font-bold text-gray-900">${totalDiscount.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalDiscount)}</p>
               </div>
               <div className="p-3 rounded-2xl bg-orange-100 text-orange-600">
                 <Calendar className="h-5 w-5" />

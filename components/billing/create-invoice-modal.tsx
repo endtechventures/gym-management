@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Trash2 } from "lucide-react"
 import type { Invoice } from "@/types/gym"
+import { formatCurrency } from "@/lib/currency"
 
 interface CreateInvoiceModalProps {
   open: boolean
@@ -142,7 +143,7 @@ export function CreateInvoiceModal({ open, onClose, onCreate }: CreateInvoiceMod
           <div className="p-4 bg-gray-50 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="font-medium">Total Amount:</span>
-              <span className="text-xl font-bold text-green-600">${total.toFixed(2)}</span>
+              <span className="text-xl font-bold text-green-600">{formatCurrency(total)}</span>
             </div>
           </div>
 

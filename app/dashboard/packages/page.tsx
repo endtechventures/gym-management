@@ -13,6 +13,7 @@ import { useGymContext } from "@/lib/gym-context"
 import { getPlans } from "@/lib/supabase-queries"
 import type { Plan } from "@/types/database"
 import { DashboardSkeleton } from "@/components/dashboard/skeleton-loader"
+import { getCurrencySymbol } from "@/lib/currency"
 
 export default function PackagesPage() {
   const { currentSubaccountId, isLoading: contextLoading } = useGymContext()
@@ -72,7 +73,7 @@ export default function PackagesPage() {
       accessorKey: "price",
       cell: ({ row }: any) => (
         <div>
-          <span className="text-lg font-bold text-green-600">${row.original.price}</span>
+          <span className="text-lg font-bold text-green-600">{getCurrencySymbol()}{row.original.price}</span>
           <span className="text-sm text-gray-500">/{row.original.duration} days</span>
         </div>
       ),
@@ -186,7 +187,7 @@ export default function PackagesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Avg Price</p>
-                <p className="text-2xl font-bold text-gray-900">${avgPrice.toFixed(0)}</p>
+                <p className="text-2xl font-bold text-gray-900">{getCurrencySymbol()}{avgPrice.toFixed(0)}</p>
               </div>
               <div className="p-3 rounded-2xl bg-orange-100 text-orange-600">
                 <DollarSign className="h-5 w-5" />

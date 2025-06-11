@@ -11,6 +11,7 @@ import { AddPaymentModal } from "../payments/add-payment-modal"
 import type { Member, Payment, Plan } from "@/types/database"
 import { Plus, Calendar, CreditCard, DollarSign, CheckCircle } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
+import { formatCurrency } from "@/lib/currency"
 
 interface MemberPaymentsTabProps {
   member: Member
@@ -160,17 +161,19 @@ export function MemberPaymentsTab({ member, onPaymentAdded, onClose, isNewMember
     {
       header: "Amount",
       accessorKey: "amount",
-      cell: ({ row }: any) => <span className="font-medium">${row.original.amount}</span>,
+      cell: ({ row }: any) => <span className="font-medium">{formatCurrency(row.original.amount)}</span>,
     },
     {
       header: "Discount",
       accessorKey: "discount",
-      cell: ({ row }: any) => <span className="text-red-600">-${row.original.discount}</span>,
+      cell: ({ row }: any) => <span className="text-red-600">-{formatCurrency(row.original.discount)}</span>,
     },
     {
       header: "Final Amount",
       accessorKey: "final_amount",
-      cell: ({ row }: any) => <span className="font-medium text-green-600">${row.original.final_amount}</span>,
+      cell: ({ row }: any) => (
+        <span className="font-medium text-green-600">{formatCurrency(row.original.final_amount)}</span>
+      ),
     },
     {
       header: "Payment Method",
@@ -212,7 +215,7 @@ export function MemberPaymentsTab({ member, onPaymentAdded, onClose, isNewMember
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Paid</p>
-                <p className="text-lg font-bold text-gray-900">${totalPaid.toFixed(2)}</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(totalPaid)}</p>
               </div>
               <div className="p-2 rounded-lg bg-green-100 text-green-600">
                 <DollarSign className="h-4 w-4" />
@@ -248,12 +251,12 @@ export function MemberPaymentsTab({ member, onPaymentAdded, onClose, isNewMember
             <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg">
               <div>
                 <p className="font-medium">
-                  {activePlan.name} - ${lastPayment?.final_amount || activePlan.price} due on{" "}
+                  {activePlan.name} - {formatCurrency(lastPayment?.final_amount || activePlan.price)} due on{" "}
                   {new Date(member.next_payment).toLocaleDateString()}
                 </p>
                 <p className="text-sm text-gray-600">
                   {lastPayment
-                    ? `Will use last payment details: $${lastPayment.final_amount} via ${lastPayment.payment_method?.name}`
+                    ? `Will use last payment details: ${formatCurrency(lastPayment.final_amount)} via ${lastPayment.payment_method?.name}`
                     : "Will use plan price as no previous payment found"}
                 </p>
               </div>

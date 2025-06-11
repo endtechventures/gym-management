@@ -46,6 +46,7 @@ export interface Database {
           website: string | null
           description: string | null
           onboarding_completed: boolean
+          currency_id: string
           created_at: string
           updated_at: string
         }
@@ -58,6 +59,7 @@ export interface Database {
           website?: string | null
           description?: string | null
           onboarding_completed?: boolean
+          currency_id: string
           created_at?: string
           updated_at?: string
         }
@@ -70,6 +72,7 @@ export interface Database {
           website?: string | null
           description?: string | null
           onboarding_completed?: boolean
+          currency_id?: string
           created_at?: string
           updated_at?: string
         }
@@ -206,6 +209,15 @@ export interface Database {
       }
     }
   }
+}
+
+export interface Currency {
+  id: string
+  name: string
+  symbol: string
+  code: string
+  created_at: string
+  updated_at: string
 }
 
 export interface Member {

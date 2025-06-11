@@ -25,6 +25,7 @@ import type { Member } from "@/types/database"
 import { NotificationSettingsModal } from "@/components/dashboard/notification-settings-modal"
 import { useRouter } from "next/navigation"
 import { EditMemberModal } from "@/components/members/edit-member-modal"
+import { formatCurrency } from "@/lib/currency"
 
 interface DashboardStats {
   totalMembers: number
@@ -48,6 +49,9 @@ interface MaintenanceItem {
   equipment_name?: string
   brand?: string
   category?: string
+  days_until?: number
+  is_overdue?: boolean
+  days_overdue?: number
 }
 
 interface ExpiringMembership {
@@ -58,6 +62,8 @@ interface ExpiringMembership {
   plan_name: string
   expiry_date: string
   days_remaining: number
+  is_expired?: boolean
+  days_expired?: number
 }
 
 interface NotificationSettings {
@@ -138,9 +144,9 @@ export default function Dashboard() {
       const { data: members, error: membersError } = await supabase
         .from("members")
         .select(`
-          *,
-          plan:plans(*)
-        `)
+        *,
+        plan:plans(*)
+      `)
         .eq("subaccount_id", subaccountId)
         .order("created_at", { ascending: false })
 
@@ -155,15 +161,15 @@ export default function Dashboard() {
       const { data: payments, error: paymentsError } = await supabase
         .from("payments")
         .select(`
-          *,
-          member:members!inner(
-            id,
-            name,
-            subaccount_id
-          ),
-          plan:plans(*),
-          payment_method:payment_methods(*)
-        `)
+        *,
+        member:members!inner(
+          id,
+          name,
+          subaccount_id
+        ),
+        plan:plans(*),
+        payment_method:payment_methods(*)
+      `)
         .eq("member.subaccount_id", subaccountId)
         .order("paid_at", { ascending: false })
 
@@ -290,7 +296,7 @@ export default function Dashboard() {
         return
       }
 
-      // Calculate which items need maintenance soon
+      // Calculate which items need maintenance soon OR are overdue
       const upcomingMaintenanceItems = (data || [])
         .map((item) => {
           if (!item.last_maintenance || !item.maintenance_interval_days) return null
@@ -303,25 +309,42 @@ export default function Dashboard() {
             (nextMaintenanceDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
           )
 
-          // Only include items that need maintenance within the notification window
-          if (daysUntilMaintenance <= notificationSettings.maintenanceDays && daysUntilMaintenance >= 0) {
+          // Include items that are overdue (negative days) OR within notification window
+          if (daysUntilMaintenance <= notificationSettings.maintenanceDays) {
+            const isOverdue = daysUntilMaintenance < 0
+            const daysOverdue = Math.abs(daysUntilMaintenance)
+
             return {
               id: item.id,
               title: `${item.name} Maintenance`,
-              description: `${item.category || "Equipment"} maintenance due`,
+              description: `${item.category || "Equipment"} maintenance ${isOverdue ? "overdue" : "due"}`,
               scheduled_date: nextMaintenanceDate.toISOString().split("T")[0],
-              status: "scheduled",
-              priority: daysUntilMaintenance <= 2 ? "high" : daysUntilMaintenance <= 5 ? "medium" : "low",
+              status: isOverdue ? "overdue" : "scheduled",
+              priority: isOverdue
+                ? "critical"
+                : daysUntilMaintenance <= 2
+                  ? "high"
+                  : daysUntilMaintenance <= 5
+                    ? "medium"
+                    : "low",
               equipment_name: item.name,
               brand: item.brand,
               category: item.category,
               days_until: daysUntilMaintenance,
+              is_overdue: isOverdue,
+              days_overdue: isOverdue ? daysOverdue : 0,
             }
           }
           return null
         })
         .filter(Boolean)
-        .sort((a, b) => a.days_until - b.days_until) // Sort by urgency
+        .sort((a, b) => {
+          // Sort by priority: overdue first, then by urgency
+          if (a.is_overdue && !b.is_overdue) return -1
+          if (!a.is_overdue && b.is_overdue) return 1
+          if (a.is_overdue && b.is_overdue) return b.days_overdue - a.days_overdue
+          return a.days_until - b.days_until
+        })
 
       setUpcomingMaintenance(upcomingMaintenanceItems)
     } catch (error) {
@@ -335,22 +358,20 @@ export default function Dashboard() {
       const futureDate = new Date()
       futureDate.setDate(today.getDate() + notificationSettings.membershipDays)
 
-      // Fetch members with memberships expiring soon
+      // Fetch members with memberships expiring soon OR already expired
       const { data: members, error } = await supabase
         .from("members")
         .select(`
-        id,
-        name,
-        email,
-        phone,
-        next_payment,
-        plan:plans(name, duration, price)
-      `)
+      id,
+      name,
+      email,
+      phone,
+      next_payment,
+      plan:plans(name, duration, price)
+    `)
         .eq("subaccount_id", subaccountId)
         .eq("is_active", true)
         .not("next_payment", "is", null)
-        .gte("next_payment", today.toISOString().split("T")[0])
-        .lte("next_payment", futureDate.toISOString().split("T")[0])
         .order("next_payment", { ascending: true })
 
       if (error) {
@@ -358,22 +379,41 @@ export default function Dashboard() {
         return
       }
 
-      // Calculate days remaining for each membership
+      // Calculate days remaining for each membership, including expired ones
       const expiringMembers =
-        members?.map((member) => {
-          const expiryDate = new Date(member.next_payment)
-          const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        members
+          ?.filter((member) => {
+            const expiryDate = new Date(member.next_payment)
+            const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
-          return {
-            id: member.id,
-            name: member.name,
-            email: member.email,
-            phone: member.phone,
-            plan_name: member.plan?.name || "Unknown Plan",
-            expiry_date: member.next_payment,
-            days_remaining: daysRemaining,
-          }
-        }) || []
+            // Include expired memberships (negative days) OR memberships expiring within notification window
+            return daysRemaining <= notificationSettings.membershipDays
+          })
+          .map((member) => {
+            const expiryDate = new Date(member.next_payment)
+            const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+            const isExpired = daysRemaining < 0
+            const daysExpired = Math.abs(daysRemaining)
+
+            return {
+              id: member.id,
+              name: member.name,
+              email: member.email,
+              phone: member.phone,
+              plan_name: member.plan?.name || "Unknown Plan",
+              expiry_date: member.next_payment,
+              days_remaining: daysRemaining,
+              is_expired: isExpired,
+              days_expired: isExpired ? daysExpired : 0,
+            }
+          })
+          .sort((a, b) => {
+            // Sort by priority: expired first, then by urgency
+            if (a.is_expired && !b.is_expired) return -1
+            if (!a.is_expired && b.is_expired) return 1
+            if (a.is_expired && b.is_expired) return b.days_expired - a.days_expired
+            return a.days_remaining - b.days_remaining
+          }) || []
 
       setExpiringMemberships(expiringMembers)
     } catch (error) {
@@ -529,9 +569,9 @@ export default function Dashboard() {
       const { data: member, error } = await supabase
         .from("members")
         .select(`
-          *,
-          plan:plans(*)
-        `)
+        *,
+        plan:plans(*)
+      `)
         .eq("id", membershipItem.id)
         .single()
 
@@ -706,7 +746,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Monthly Revenue</p>
-                <p className="text-3xl font-bold text-gray-900">${stats.monthlyRevenue.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-gray-900">{formatCurrency(stats.monthlyRevenue)}</p>
                 <div className="flex items-center mt-2">
                   {stats.revenueGrowth >= 0 ? (
                     <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
@@ -827,37 +867,42 @@ export default function Dashboard() {
                   <div className="mb-4">
                     <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                       <Tool className="h-4 w-4 mr-1 text-blue-500" />
-                      Upcoming Maintenance ({upcomingMaintenance.length})
+                      Maintenance Alerts ({upcomingMaintenance.length})
                     </h3>
                     <div className="space-y-2">
                       {upcomingMaintenance.map((item) => {
                         const scheduledDate = new Date(item.scheduled_date)
                         const today = new Date()
                         today.setHours(0, 0, 0, 0)
-                        const daysUntil = Math.ceil((scheduledDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+                        const daysUntil = item.days_until
                         const isToday = daysUntil === 0
+                        const isOverdue = item.is_overdue
 
                         return (
                           <div
                             key={`maintenance-${item.id}`}
                             className={`flex items-center justify-between p-3 rounded-lg border ${
-                              isToday
-                                ? "bg-blue-50 border-blue-200"
-                                : item.priority === "high"
-                                  ? "bg-orange-50 border-orange-200"
-                                  : "bg-gray-50 border-gray-200"
+                              isOverdue
+                                ? "bg-red-50 border-red-200"
+                                : isToday
+                                  ? "bg-blue-50 border-blue-200"
+                                  : item.priority === "high"
+                                    ? "bg-orange-50 border-orange-200"
+                                    : "bg-gray-50 border-gray-200"
                             }`}
                           >
                             <div className="flex items-center space-x-3">
                               <div
                                 className={`h-8 w-8 rounded-full flex items-center justify-center
-                                ${
-                                  item.priority === "high"
+                              ${
+                                isOverdue
+                                  ? "bg-red-100 text-red-600"
+                                  : item.priority === "high"
                                     ? "bg-orange-100 text-orange-600"
                                     : item.priority === "medium"
                                       ? "bg-yellow-100 text-yellow-600"
                                       : "bg-blue-100 text-blue-600"
-                                }`}
+                              }`}
                               >
                                 <Tool className="h-4 w-4" />
                               </div>
@@ -881,16 +926,22 @@ export default function Dashboard() {
                                   Mark Done
                                 </Button>
                                 <Badge
-                                  variant={isToday ? "default" : "secondary"}
+                                  variant={isOverdue ? "destructive" : isToday ? "default" : "secondary"}
                                   className={
-                                    isToday
-                                      ? "bg-blue-100 text-blue-800"
-                                      : item.priority === "high"
-                                        ? "bg-orange-100 text-orange-800"
-                                        : "bg-gray-100 text-gray-800"
+                                    isOverdue
+                                      ? "bg-red-100 text-red-800"
+                                      : isToday
+                                        ? "bg-blue-100 text-blue-800"
+                                        : item.priority === "high"
+                                          ? "bg-orange-100 text-orange-800"
+                                          : "bg-gray-100 text-gray-800"
                                   }
                                 >
-                                  {isToday ? "Today" : `In ${daysUntil} day${daysUntil > 1 ? "s" : ""}`}
+                                  {isOverdue
+                                    ? `${item.days_overdue} day${item.days_overdue > 1 ? "s" : ""} overdue`
+                                    : isToday
+                                      ? "Today"
+                                      : `In ${daysUntil} day${daysUntil > 1 ? "s" : ""}`}
                                 </Badge>
                               </div>
                               <p className="text-xs text-gray-500">{scheduledDate.toLocaleDateString()}</p>
@@ -907,21 +958,30 @@ export default function Dashboard() {
                   <div className="mb-4">
                     <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
                       <Clock className="h-4 w-4 mr-1 text-purple-500" />
-                      Expiring Memberships ({expiringMemberships.length})
+                      Membership Alerts ({expiringMemberships.length})
                     </h3>
                     <div className="space-y-2">
                       {expiringMemberships.map((member) => {
                         const isToday = member.days_remaining === 0
+                        const isExpired = member.is_expired
 
                         return (
                           <div
                             key={`expiry-${member.id}`}
                             className={`flex items-center justify-between p-3 rounded-lg border ${
-                              isToday ? "bg-purple-50 border-purple-200" : "bg-gray-50 border-gray-200"
+                              isExpired
+                                ? "bg-red-50 border-red-200"
+                                : isToday
+                                  ? "bg-purple-50 border-purple-200"
+                                  : "bg-gray-50 border-gray-200"
                             }`}
                           >
                             <div className="flex items-center space-x-3">
-                              <div className="h-8 w-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+                              <div
+                                className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                                  isExpired ? "bg-red-100 text-red-600" : "bg-purple-100 text-purple-600"
+                                }`}
+                              >
                                 <Clock className="h-4 w-4" />
                               </div>
                               <div>
@@ -940,12 +1000,20 @@ export default function Dashboard() {
                                   Take Action
                                 </Button>
                                 <Badge
-                                  variant={isToday ? "default" : "secondary"}
-                                  className={isToday ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-800"}
+                                  variant={isExpired ? "destructive" : isToday ? "default" : "secondary"}
+                                  className={
+                                    isExpired
+                                      ? "bg-red-100 text-red-800"
+                                      : isToday
+                                        ? "bg-purple-100 text-purple-800"
+                                        : "bg-gray-100 text-gray-800"
+                                  }
                                 >
-                                  {isToday
-                                    ? "Expires today"
-                                    : `Expires in ${member.days_remaining} day${member.days_remaining > 1 ? "s" : ""}`}
+                                  {isExpired
+                                    ? `Expired ${member.days_expired} day${member.days_expired > 1 ? "s" : ""} ago`
+                                    : isToday
+                                      ? "Expires today"
+                                      : `Expires in ${member.days_remaining} day${member.days_remaining > 1 ? "s" : ""}`}
                                 </Badge>
                               </div>
                               <p className="text-xs text-gray-500">
@@ -983,10 +1051,11 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm font-medium text-green-900">Avg. Payment Amount (Per Payment)</p>
                 <p className="text-2xl font-bold text-green-900">
-                  $
-                  {stats.currentMonthPaymentsCount > 0
-                    ? Math.round(stats.monthlyRevenue / stats.currentMonthPaymentsCount)
-                    : 0}
+                  {formatCurrency(
+                    stats.currentMonthPaymentsCount > 0
+                      ? Math.round(stats.monthlyRevenue / stats.currentMonthPaymentsCount)
+                      : 0,
+                  )}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />

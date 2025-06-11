@@ -21,6 +21,12 @@ import { supabase } from "@/lib/supabase-queries"
 import { useGymContext } from "@/lib/gym-context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+// Import jsPDF only
+import { jsPDF } from "jspdf"
+
+// Import at the top
+import { formatCurrency } from "@/lib/currency"
+
 interface AnalyticsData {
   payments: {
     totalAmount: number
@@ -559,6 +565,353 @@ export default function AnalyticsPage() {
     }
   }
 
+  const generatePDF = async () => {
+    try {
+      setDataLoading(true)
+
+      const franchiseName =
+        selectedFranchise === "all"
+          ? "All Franchises"
+          : franchises.find((f) => f.id === selectedFranchise)?.name || "Current Location"
+
+      const pdf = new jsPDF("p", "mm", "a4")
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      let yPosition = 20
+
+      // Helper function to add new page if needed
+      const checkPageBreak = (requiredHeight: number) => {
+        if (yPosition + requiredHeight > pageHeight - 20) {
+          pdf.addPage()
+          yPosition = 20
+        }
+      }
+
+      // Helper function to draw a simple table
+      const drawTable = (headers: string[], rows: string[][], startY: number, title?: string) => {
+        let currentY = startY
+
+        if (title) {
+          pdf.setFontSize(12)
+          pdf.setFont("helvetica", "bold")
+          pdf.text(title, 20, currentY)
+          currentY += 10
+        }
+
+        // Calculate column widths
+        const tableWidth = pageWidth - 40
+        const colWidth = tableWidth / headers.length
+        const rowHeight = 8
+
+        // Draw headers
+        pdf.setFillColor(59, 130, 246)
+        pdf.setTextColor(255, 255, 255)
+        pdf.setFontSize(10)
+        pdf.setFont("helvetica", "bold")
+
+        pdf.rect(20, currentY, tableWidth, rowHeight, "F")
+        headers.forEach((header, index) => {
+          pdf.text(header, 22 + index * colWidth, currentY + 5)
+        })
+
+        currentY += rowHeight
+
+        // Draw rows
+        pdf.setTextColor(0, 0, 0)
+        pdf.setFont("helvetica", "normal")
+        pdf.setFontSize(9)
+
+        rows.forEach((row, rowIndex) => {
+          // Alternate row colors
+          if (rowIndex % 2 === 0) {
+            pdf.setFillColor(248, 250, 252)
+            pdf.rect(20, currentY, tableWidth, rowHeight, "F")
+          }
+
+          row.forEach((cell, colIndex) => {
+            pdf.text(cell.toString(), 22 + colIndex * colWidth, currentY + 5)
+          })
+
+          currentY += rowHeight
+
+          // Check if we need a new page
+          if (currentY > pageHeight - 30) {
+            pdf.addPage()
+            currentY = 20
+          }
+        })
+
+        return currentY + 10
+      }
+
+      // Title Page
+      pdf.setFontSize(24)
+      pdf.setFont("helvetica", "bold")
+      pdf.setTextColor(0, 0, 0)
+      pdf.text("Analytics Report", pageWidth / 2, 40, { align: "center" })
+
+      pdf.setFontSize(16)
+      pdf.setFont("helvetica", "normal")
+      pdf.text(`Franchise: ${franchiseName}`, pageWidth / 2, 55, { align: "center" })
+      pdf.text(
+        `Date Range: ${dateRange.from.toLocaleDateString()} to ${dateRange.to.toLocaleDateString()}`,
+        pageWidth / 2,
+        70,
+        { align: "center" },
+      )
+      pdf.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, 85, { align: "center" })
+
+      yPosition = 110
+
+      // Executive Summary
+      checkPageBreak(60)
+      pdf.setFontSize(18)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("Executive Summary", 20, yPosition)
+      yPosition += 15
+
+      const summaryHeaders = ["Metric", "Value"]
+      const summaryRows = [
+        ["Total Revenue", formatCurrency(analyticsData.overview?.totalRevenue || 0)],
+        ["Total Expenses", formatCurrency(analyticsData.overview?.totalExpenses || 0)],
+        ["Net Profit", formatCurrency(analyticsData.overview?.netProfit || 0)],
+        [
+          "Profit Margin",
+          `${analyticsData.overview?.totalRevenue > 0 ? (((analyticsData.overview?.netProfit || 0) / analyticsData.overview.totalRevenue) * 100).toFixed(1) : 0}%`,
+        ],
+        ["Total Members", `${analyticsData.overview?.totalMembers || 0}`],
+        ["Active Members", `${analyticsData.overview?.activeMembers || 0}`],
+        ["New Members", `${analyticsData.overview?.newMembers || 0}`],
+        [
+          "Member Retention Rate",
+          `${analyticsData.members?.churnRate ? (100 - analyticsData.members.churnRate).toFixed(1) : 100}%`,
+        ],
+      ]
+
+      yPosition = drawTable(summaryHeaders, summaryRows, yPosition)
+
+      // Overview Section
+      pdf.addPage()
+      yPosition = 20
+      pdf.setFontSize(18)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("Overview Analysis", 20, yPosition)
+      yPosition += 20
+
+      // Monthly Revenue vs Expenses
+      const monthlyHeaders = ["Month", "Revenue", "Expenses", "Profit"]
+      const monthlyRows = Object.keys(analyticsData.payments?.paymentsByMonth || {}).map((month) => [
+        month,
+        formatCurrency(analyticsData.payments?.paymentsByMonth?.[month] || 0),
+        formatCurrency(analyticsData.expenses?.expensesByMonth?.[month] || 0),
+        formatCurrency(
+          (analyticsData.payments?.paymentsByMonth?.[month] || 0) -
+            (analyticsData.expenses?.expensesByMonth?.[month] || 0),
+        ),
+      ])
+
+      yPosition = drawTable(monthlyHeaders, monthlyRows, yPosition, "Monthly Revenue vs Expenses")
+
+      // Franchise Performance (if applicable)
+      if (selectedFranchise === "all" && franchises.length > 1) {
+        checkPageBreak(40)
+        const franchiseHeaders = ["Franchise", "Revenue", "Expenses", "Members", "Profit Margin"]
+        const franchiseRows = Object.keys(analyticsData.payments?.paymentsByFranchise || {}).map((franchise) => [
+          franchise,
+          `$${(analyticsData.payments?.paymentsByFranchise?.[franchise] || 0).toLocaleString()}`,
+          `$${(analyticsData.expenses?.expensesByFranchise?.[franchise] || 0).toLocaleString()}`,
+          `${analyticsData.members?.membersByFranchise?.[franchise] || 0}`,
+          `${analyticsData.payments?.paymentsByFranchise?.[franchise] ? (((analyticsData.payments.paymentsByFranchise[franchise] - (analyticsData.expenses?.expensesByFranchise?.[franchise] || 0)) / analyticsData.payments.paymentsByFranchise[franchise]) * 100).toFixed(1) : 0}%`,
+        ])
+
+        yPosition = drawTable(franchiseHeaders, franchiseRows, yPosition, "Franchise Performance Comparison")
+      }
+
+      // Payments Analysis
+      pdf.addPage()
+      yPosition = 20
+      pdf.setFontSize(18)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("Payments Analysis", 20, yPosition)
+      yPosition += 20
+
+      // Payment Summary
+      const paymentSummaryHeaders = ["Metric", "Value"]
+      const paymentSummaryRows = [
+        ["Total Payments", `${analyticsData.payments?.totalCount || 0}`],
+        ["Total Amount", `$${analyticsData.payments?.totalAmount?.toLocaleString() || "0"}`],
+        ["Average Payment", `$${analyticsData.payments?.averagePayment?.toFixed(2) || "0"}`],
+        [
+          "Payment Methods",
+          `${
+            Object.keys(
+              analyticsData.payments?.payments?.reduce((acc: any, p: any) => {
+                acc[p.payment_method?.name || "Unknown"] = true
+                return acc
+              }, {}) || {},
+            ).length
+          }`,
+        ],
+      ]
+
+      yPosition = drawTable(paymentSummaryHeaders, paymentSummaryRows, yPosition, "Payment Summary")
+
+      // Revenue by Plan
+      checkPageBreak(40)
+      const planRevenueHeaders = ["Plan", "Revenue", "Percentage"]
+      const planRevenueRows = Object.keys(analyticsData.payments?.paymentsByPlan || {}).map((plan) => [
+        plan,
+        `$${(analyticsData.payments?.paymentsByPlan?.[plan] || 0).toLocaleString()}`,
+        `${(((analyticsData.payments?.paymentsByPlan?.[plan] || 0) / (analyticsData.payments?.totalAmount || 1)) * 100).toFixed(1)}%`,
+      ])
+
+      yPosition = drawTable(planRevenueHeaders, planRevenueRows, yPosition, "Revenue by Plan")
+
+      // Recent Payments
+      checkPageBreak(40)
+      const recentPaymentsHeaders = ["Date", "Member", "Plan", "Amount", "Method"]
+      const recentPaymentsRows = (analyticsData.payments?.payments || [])
+        .slice(0, 10)
+        .map((payment: any) => [
+          new Date(payment.paid_at).toLocaleDateString(),
+          payment.member?.name || "Unknown",
+          payment.plan?.name || "N/A",
+          `$${payment.final_amount || payment.amount || 0}`,
+          payment.payment_method?.name || "N/A",
+        ])
+
+      yPosition = drawTable(recentPaymentsHeaders, recentPaymentsRows, yPosition, "Recent Payments (Top 10)")
+
+      // Expenses Analysis
+      pdf.addPage()
+      yPosition = 20
+      pdf.setFontSize(18)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("Expenses Analysis", 20, yPosition)
+      yPosition += 20
+
+      // Expense Summary
+      const expenseSummaryHeaders = ["Metric", "Value"]
+      const expenseSummaryRows = [
+        ["Total Expenses", `${analyticsData.expenses?.totalCount || 0}`],
+        ["Total Amount", `$${analyticsData.expenses?.totalAmount?.toLocaleString() || "0"}`],
+        ["Average Expense", `$${analyticsData.expenses?.averageExpense?.toFixed(2) || "0"}`],
+        ["Categories", `${Object.keys(analyticsData.expenses?.expensesByCategory || {}).length}`],
+      ]
+
+      yPosition = drawTable(expenseSummaryHeaders, expenseSummaryRows, yPosition, "Expense Summary")
+
+      // Expenses by Category
+      checkPageBreak(40)
+      const categoryExpenseHeaders = ["Category", "Amount", "Percentage"]
+      const categoryExpenseRows = Object.keys(analyticsData.expenses?.expensesByCategory || {}).map((category) => [
+        category,
+        `$${(analyticsData.expenses?.expensesByCategory?.[category] || 0).toLocaleString()}`,
+        `${(((analyticsData.expenses?.expensesByCategory?.[category] || 0) / (analyticsData.expenses?.totalAmount || 1)) * 100).toFixed(1)}%`,
+      ])
+
+      yPosition = drawTable(categoryExpenseHeaders, categoryExpenseRows, yPosition, "Expenses by Category")
+
+      // Recent Expenses
+      checkPageBreak(40)
+      const recentExpensesHeaders = ["Date", "Description", "Category", "Amount", "Location"]
+      const recentExpensesRows = (analyticsData.expenses?.expenses || [])
+        .slice(0, 10)
+        .map((expense: any) => [
+          new Date(expense.created_at || expense.date || expense.expense_date).toLocaleDateString(),
+          expense.description || "N/A",
+          expense.category || "Uncategorized",
+          `$${expense.amount || 0}`,
+          expense.subaccount?.name || "Unknown",
+        ])
+
+      yPosition = drawTable(recentExpensesHeaders, recentExpensesRows, yPosition, "Recent Expenses (Top 10)")
+
+      // Members Analysis
+      pdf.addPage()
+      yPosition = 20
+      pdf.setFontSize(18)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("Members Analysis", 20, yPosition)
+      yPosition += 20
+
+      // Member Summary
+      const memberSummaryHeaders = ["Metric", "Value"]
+      const memberSummaryRows = [
+        ["Total Members", `${analyticsData.members?.totalMembers || 0}`],
+        ["Active Members", `${analyticsData.members?.activeMembers || 0}`],
+        ["Inactive Members", `${analyticsData.members?.inactiveMembers || 0}`],
+        ["New Members (Period)", `${analyticsData.members?.newMembers || 0}`],
+        [
+          "Retention Rate",
+          `${analyticsData.members?.churnRate ? (100 - analyticsData.members.churnRate).toFixed(1) : 100}%`,
+        ],
+        ["Active Plans", `${Object.keys(analyticsData.members?.membersByPlan || {}).length}`],
+      ]
+
+      yPosition = drawTable(memberSummaryHeaders, memberSummaryRows, yPosition, "Member Summary")
+
+      // Members by Plan
+      checkPageBreak(40)
+      const planMemberHeaders = ["Plan", "Members", "Percentage"]
+      const planMemberRows = Object.keys(analyticsData.members?.membersByPlan || {}).map((plan) => [
+        plan,
+        `${analyticsData.members?.membersByPlan?.[plan] || 0}`,
+        `${(((analyticsData.members?.membersByPlan?.[plan] || 0) / (analyticsData.members?.totalMembers || 1)) * 100).toFixed(1)}%`,
+      ])
+
+      yPosition = drawTable(planMemberHeaders, planMemberRows, yPosition, "Members by Plan")
+
+      // Demographics
+      checkPageBreak(40)
+      const genderHeaders = ["Gender", "Count"]
+      const genderRows = [
+        ["Male", `${(analyticsData.members?.members || []).filter((m: any) => m.gender === "male").length}`],
+        ["Female", `${(analyticsData.members?.members || []).filter((m: any) => m.gender === "female").length}`],
+        [
+          "Other/Not Specified",
+          `${(analyticsData.members?.members || []).filter((m: any) => !m.gender || (m.gender !== "male" && m.gender !== "female")).length}`,
+        ],
+      ]
+
+      yPosition = drawTable(genderHeaders, genderRows, yPosition, "Member Demographics")
+
+      // Age Distribution
+      checkPageBreak(40)
+      const ageHeaders = ["Age Group", "Count"]
+      const ageRows = [
+        ["18-24", `${(analyticsData.members?.members || []).filter((m: any) => m.age >= 18 && m.age <= 24).length}`],
+        ["25-34", `${(analyticsData.members?.members || []).filter((m: any) => m.age >= 25 && m.age <= 34).length}`],
+        ["35-44", `${(analyticsData.members?.members || []).filter((m: any) => m.age >= 35 && m.age <= 44).length}`],
+        ["45-54", `${(analyticsData.members?.members || []).filter((m: any) => m.age >= 45 && m.age <= 54).length}`],
+        ["55+", `${(analyticsData.members?.members || []).filter((m: any) => m.age >= 55).length}`],
+        ["Unknown", `${(analyticsData.members?.members || []).filter((m: any) => !m.age).length}`],
+      ]
+
+      yPosition = drawTable(ageHeaders, ageRows, yPosition, "Age Distribution")
+
+      // Footer on each page
+      const totalPages = pdf.internal.getNumberOfPages()
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i)
+        pdf.setFontSize(8)
+        pdf.setFont("helvetica", "normal")
+        pdf.setTextColor(128, 128, 128)
+        pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 30, pageHeight - 10)
+        pdf.text(`Generated on ${new Date().toLocaleDateString()}`, 20, pageHeight - 10)
+      }
+
+      // Save the PDF
+      const fileName = `analytics-report-${franchiseName.replace(/\s+/g, "-")}-${dateRange.from.toISOString().split("T")[0]}-to-${dateRange.to.toISOString().split("T")[0]}.pdf`
+      pdf.save(fileName)
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      alert("Error generating PDF report. Please try again.")
+    } finally {
+      setDataLoading(false)
+    }
+  }
+
   const generateReport = () => {
     const franchiseName =
       selectedFranchise === "all"
@@ -652,9 +1005,9 @@ export default function AnalyticsPage() {
             </Select>
           )}
           <DatePickerWithRange date={dateRange} onDateChange={setDateRange} />
-          <Button onClick={generateReport} className="bg-blue-600 hover:bg-blue-700" disabled={dataLoading}>
+          <Button onClick={generatePDF} className="bg-blue-600 hover:bg-blue-700" disabled={dataLoading}>
             <Download className="mr-2 h-4 w-4" />
-            Export Report
+            Export PDF Report
           </Button>
         </div>
       </div>
@@ -695,8 +1048,9 @@ export default function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                  {/* Update metric cards */}
                   <p className="text-2xl font-bold text-gray-900">
-                    ${analyticsData.overview?.totalRevenue?.toLocaleString() || "0"}
+                    {formatCurrency(analyticsData.overview?.totalRevenue || 0)}
                   </p>
                   <div className="flex items-center mt-2">
                     <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
@@ -717,8 +1071,9 @@ export default function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Expenses</p>
+                  {/* Update metric cards */}
                   <p className="text-2xl font-bold text-gray-900">
-                    ${analyticsData.overview?.totalExpenses?.toLocaleString() || "0"}
+                    {formatCurrency(analyticsData.overview?.totalExpenses || 0)}
                   </p>
                   <div className="flex items-center mt-2">
                     <Receipt className="h-4 w-4 text-red-500 mr-1" />
@@ -739,8 +1094,9 @@ export default function AnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Net Profit</p>
+                  {/* Update metric cards */}
                   <p className="text-2xl font-bold text-gray-900">
-                    ${analyticsData.overview?.netProfit?.toLocaleString() || "0"}
+                    {formatCurrency(analyticsData.overview?.netProfit || 0)}
                   </p>
                   <div className="flex items-center mt-2">
                     {(analyticsData.overview?.netProfit || 0) >= 0 ? (

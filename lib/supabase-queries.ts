@@ -239,5 +239,82 @@ export async function getPaymentMethods() {
   return data
 }
 
+// Add currency functions
+export async function getCurrencies() {
+  const { data, error } = await supabase.from("currency").select("*").order("name")
+
+  if (error) throw error
+  return data
+}
+
+export async function getAccountCurrency(accountId: string) {
+  const { data, error } = await supabase
+    .from("accounts")
+    .select(`
+      currency_id,
+      currency:currency(*)
+    `)
+    .eq("id", accountId)
+    .single()
+
+  if (error) throw error
+  return data?.currency
+}
+
+// Update existing functions to include currency context where needed
+export async function getAccountDetails(accountId: string) {
+  const { data, error } = await supabase
+    .from("accounts")
+    .select(`
+      *,
+      currency:currency(*)
+    `)
+    .eq("id", accountId)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Account Functions
+export async function updateAccount(accountId: string, accountData: any) {
+  try {
+    console.log("Updating account with data:", accountData)
+
+    const validAccountData = {
+      name: accountData.name,
+      email: accountData.email,
+      phone: accountData.phone,
+      address: accountData.address,
+      website: accountData.website,
+      description: accountData.description,
+      currency_id: accountData.currency_id,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data, error } = await supabase
+      .from("accounts")
+      .update(validAccountData)
+      .eq("id", accountId)
+      .select(`
+        *,
+        currency:currency(*)
+      `)
+      .single()
+
+    if (error) {
+      console.error("Database error updating account:", error)
+      throw error
+    }
+
+    console.log("Account updated successfully:", data)
+    return data
+  } catch (error) {
+    console.error("Error updating account:", error)
+    throw error
+  }
+}
+
+// Currency Functions
 // Export the supabase client for direct use
 export { supabase }

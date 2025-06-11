@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useGymContext } from "@/lib/gym-context"
 import { getMembers } from "@/lib/supabase-queries"
@@ -24,10 +25,12 @@ import {
   Phone,
   Mail,
   ExternalLink,
+  Filter,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { formatCurrency } from "@/lib/currency"
 
 export default function MembersPage() {
   const { currentSubaccountId } = useGymContext()
@@ -35,8 +38,10 @@ export default function MembersPage() {
   const router = useRouter()
   const [members, setMembers] = useState<Member[]>([])
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([])
+  const [plans, setPlans] = useState<any[]>([])
   const [monthlyRevenue, setMonthlyRevenue] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>("all")
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editModalTab, setEditModalTab] = useState("details")
@@ -47,18 +52,29 @@ export default function MembersPage() {
     if (currentSubaccountId) {
       loadMembers()
       loadMonthlyRevenue()
+      loadPlans()
     }
   }, [currentSubaccountId])
 
   useEffect(() => {
-    const filtered = members.filter(
+    let filtered = members.filter(
       (member) =>
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.phone?.includes(searchTerm),
     )
+
+    // Apply plan filter
+    if (selectedPlanFilter !== "all") {
+      if (selectedPlanFilter === "no-plan") {
+        filtered = filtered.filter((member) => !member.active_plan)
+      } else {
+        filtered = filtered.filter((member) => member.active_plan === selectedPlanFilter)
+      }
+    }
+
     setFilteredMembers(filtered)
-  }, [members, searchTerm])
+  }, [members, searchTerm, selectedPlanFilter])
 
   const loadMembers = async () => {
     try {
@@ -74,6 +90,27 @@ export default function MembersPage() {
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadPlans = async () => {
+    try {
+      if (!currentSubaccountId) return
+
+      const { data: plansData, error } = await supabase
+        .from("plans")
+        .select("*")
+        .eq("subaccount_id", currentSubaccountId)
+        .order("name")
+
+      if (error) {
+        console.error("Error fetching plans:", error)
+        return
+      }
+
+      setPlans(plansData || [])
+    } catch (error) {
+      console.error("Error loading plans:", error)
     }
   }
 
@@ -328,7 +365,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Monthly Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">${monthlyRevenue.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(monthlyRevenue)}</p>
               </div>
               <div className="p-2 rounded-lg bg-green-100 text-green-600">
                 <CreditCard className="h-5 w-5" />
@@ -372,6 +409,23 @@ export default function MembersPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-gray-500" />
+              <Select value={selectedPlanFilter} onValueChange={setSelectedPlanFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plans</SelectItem>
+                  <SelectItem value="no-plan">No Plan</SelectItem>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>

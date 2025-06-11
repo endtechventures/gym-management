@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 import { useGymContext } from "@/lib/gym-context"
+import { getCurrencySymbol } from "@/lib/currency"
 import { toast } from "@/components/ui/use-toast"
 
 interface Franchise {
@@ -401,7 +402,7 @@ export default function FranchisesPage() {
       cell: ({ row }: any) => (
         <div className="flex items-center space-x-1">
           <DollarSign className="h-4 w-4 text-gray-400" />
-          <span>${row.original.revenue.toLocaleString()}</span>
+          <span>{getCurrencySymbol()}{row.original.revenue.toLocaleString()}</span>
         </div>
       ),
     },
@@ -529,7 +530,7 @@ export default function FranchisesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">${totalRevenue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-900">{getCurrencySymbol()}{totalRevenue.toLocaleString()}</p>
               </div>
               <div className="p-3 rounded-2xl bg-teal-100 text-teal-600">
                 <DollarSign className="h-5 w-5" />
@@ -617,7 +618,7 @@ export default function FranchisesPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Revenue</span>
-                    <span className="text-sm font-medium">${franchise.revenue.toLocaleString()}</span>
+                    <span className="text-sm font-medium">{getCurrencySymbol()}{franchise.revenue.toLocaleString()}</span>
                   </div>
                 </div>
               </CardContent>

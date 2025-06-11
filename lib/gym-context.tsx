@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
+import { formatCurrency, DEFAULT_CURRENCY, type CurrencyInfo, getAccountCurrency } from "./currency"
 
 interface Account {
   id: string
@@ -9,6 +10,7 @@ interface Account {
   email: string
   phone: string
   onboarding_completed?: boolean
+  currency?: CurrencyInfo
 }
 
 interface Subaccount {
@@ -26,7 +28,10 @@ interface GymContextType {
   setCurrentContext: (accountId: string, subaccountId: string) => void
   isLoading: boolean
   refreshData: () => void
-  contextVersion: number // Add version to force re-renders
+  contextVersion: number
+  currentCurrency: CurrencyInfo
+  formatAmount: (amount: number | string) => string
+  getCurrencySymbol: () => string
 }
 
 const GymContext = createContext<GymContextType | undefined>(undefined)
@@ -39,6 +44,26 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [refreshCounter, setRefreshCounter] = useState(0)
   const [contextVersion, setContextVersion] = useState(0)
+  const [currentCurrency, setCurrentCurrency] = useState<CurrencyInfo>(DEFAULT_CURRENCY)
+
+  // Fetch currency when account changes
+  useEffect(() => {
+    async function fetchCurrency() {
+      if (currentAccountId) {
+        try {
+          const currency = await getAccountCurrency(currentAccountId)
+          setCurrentCurrency(currency)
+        } catch (error) {
+          console.error("Error fetching currency:", error)
+          // Keep default currency on error
+        }
+      }
+    }
+
+    if (currentAccountId) {
+      fetchCurrency()
+    }
+  }, [currentAccountId])
 
   useEffect(() => {
     // Load from localStorage on mount
@@ -51,12 +76,13 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
       setCurrentAccountId(accountId)
       setCurrentSubaccountId(subaccountId)
 
-      // Create mock objects for immediate use
+      // Create mock objects for immediate use with default currency
       setCurrentAccount({
         id: accountId,
         name: "Current Gym",
         email: "",
         phone: "",
+        currency: DEFAULT_CURRENCY,
       })
       setCurrentSubaccount({
         id: subaccountId,
@@ -84,12 +110,13 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("current_account_id", accountId)
     localStorage.setItem("current_subaccount_id", subaccountId)
 
-    // Set mock objects for immediate use
+    // Set mock objects for immediate use with default currency
     setCurrentAccount({
       id: accountId,
       name: "Current Gym",
       email: "",
       phone: "",
+      currency: DEFAULT_CURRENCY,
     })
     setCurrentSubaccount({
       id: subaccountId,
@@ -113,6 +140,14 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     setContextVersion((prev) => prev + 1)
   }
 
+  const formatAmount = (amount: number | string) => {
+    return formatCurrency(amount, currentCurrency.code)
+  }
+
+  const getCurrencySymbol = () => {
+    return currentCurrency.symbol
+  }
+
   return (
     <GymContext.Provider
       value={{
@@ -124,6 +159,9 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         refreshData,
         contextVersion,
+        currentCurrency,
+        formatAmount,
+        getCurrencySymbol,
       }}
     >
       {children}
