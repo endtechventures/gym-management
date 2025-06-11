@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useGym } from "@/lib/gym-context"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { PlusCircle, AlertCircle, Download, Filter } from "lucide-react"
+import { PlusCircle, AlertCircle, Download, Filter, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -469,8 +469,8 @@ export default function ExpensesPage() {
             <Download className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
-          <Button onClick={() => setShowAddModal(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" />
+          <Button onClick={() => setShowAddModal(true)} className="bg-teal-600 hover:bg-teal-700">
+            <Plus className="mr-2 h-4 w-4" />
             Add Expense
           </Button>
         </div>

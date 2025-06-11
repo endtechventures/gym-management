@@ -215,7 +215,7 @@ export default function PaymentsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Payments</h1>
           <p className="text-gray-600">Track and manage all payment transactions</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)} className="bg-green-600 hover:bg-green-700">
+        <Button onClick={() => setShowAddModal(true)} className="bg-teal-600 hover:bg-teal-700">
           <Plus className="mr-2 h-4 w-4" />
           Add Payment
         </Button>

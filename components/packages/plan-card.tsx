@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Edit, Trash2, Package } from "lucide-react"
 import type { Plan } from "@/types/database"
+import { getCurrencySymbol } from "@/lib/currency"
 
 interface PlanCardProps {
   plan: Plan
@@ -49,7 +50,7 @@ export function PlanCard({ plan, onEdit, onDelete }: PlanCardProps) {
 
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-3xl font-bold text-green-600">${plan.price}</div>
+            <div className="text-3xl font-bold text-green-600">{getCurrencySymbol()}{plan.price}</div>
             <div className="text-sm text-gray-500">{plan.duration} days</div>
           </div>
           <div className="text-right">

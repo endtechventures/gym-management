@@ -1048,7 +1048,7 @@ export function Header({ setSidebarOpen, onNotificationClick }: HeaderProps) {
         {/* Separator */}
         <div className="h-6 w-px bg-gray-200 lg:hidden" />
 
-        <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+        <div className="flex flex-1 gap-x-2 self-stretch lg:gap-x-4">
           {/* Current Context Display */}
           <div className="flex items-center gap-x-2 text-sm text-gray-600">
             {selectedAccount && (
@@ -1171,7 +1171,7 @@ export function Header({ setSidebarOpen, onNotificationClick }: HeaderProps) {
             )}
           </div>
 
-          <div className="flex items-center gap-x-4 lg:gap-x-6">
+          <div className="flex items-center gap-x-1 lg:gap-x-4">
             {/* Invitations Dropdown */}
             <Popover>
               <PopoverTrigger asChild>
@@ -1257,18 +1257,18 @@ export function Header({ setSidebarOpen, onNotificationClick }: HeaderProps) {
             </Popover>
 
             {/* Notifications */}
-            <Button variant="ghost" size="sm" className="relative" onClick={onNotificationClick}>
+            {/* <Button variant="ghost" size="sm" className="relative" onClick={onNotificationClick}>
               <Bell className="h-5 w-5" />
               <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-xs text-white p-0 flex items-center justify-center">
                 3
               </Badge>
-            </Button>
+            </Button> */}
 
             {/* Profile dropdown with gym switching */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0 overflow-hidden">
-                  <div className="h-full w-full rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm border-2 border-white">
+                  <div className="p-1 h-full w-full rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-sm border-2 border-white">
                     <span className="text-sm font-medium text-white">{userInitials}</span>
                   </div>
                 </Button>

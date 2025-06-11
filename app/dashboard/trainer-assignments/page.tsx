@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useGymContext } from "@/lib/gym-context"
 import { supabase } from "@/lib/supabase"
-import { PlusCircle } from "lucide-react"
+import { CreditCard, Edit, ExternalLink, MoreHorizontal, Plus, PlusCircle, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import AddAssignmentModal from "@/components/trainer-assignments/add-assignment-modal"
 import EditAssignmentModal from "@/components/trainer-assignments/edit-assignment-modal"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export default function TrainerAssignmentsPage() {
   const { currentSubaccountId, isLoading: contextLoading } = useGymContext()
@@ -320,17 +321,26 @@ export default function TrainerAssignmentsPage() {
       ),
     },
     {
-      id: "actions",
       header: "Actions",
-      cell: ({ row }) => (
-        <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={() => handleEdit(row.original)}>
-            Edit
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => handleDelete(row.original.id)}>
-            Delete
-          </Button>
-        </div>
+      id: "actions",
+      cell: ({ row }: any) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleEdit(row.original)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDelete(row.original.id)} className="text-red-600">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
   ]
@@ -362,8 +372,8 @@ export default function TrainerAssignmentsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Trainer Assignments</h1>
           <p className="text-gray-600">Assign trainers to members for personalized training</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)} className="bg-purple-600 hover:bg-purple-700">
-          <PlusCircle className="mr-2 h-4 w-4" />
+        <Button onClick={() => setShowAddModal(true)} className="bg-teal-600 hover:bg-teal-700">
+          <Plus className="mr-2 h-4 w-4" />
           Add Assignment
         </Button>
       </div>
