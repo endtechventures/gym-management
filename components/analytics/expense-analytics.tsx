@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { Badge } from "@/components/ui/badge"
+import { formatCurrency } from "@/lib/currency"
 
 interface ExpenseAnalyticsProps {
   data: any
@@ -149,7 +150,7 @@ export function ExpenseAnalytics({
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-red-600">${safeData?.totalAmount?.toLocaleString() || "0"}</p>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency(safeData?.totalAmount || 0)}</p>
               <p className="text-sm text-gray-600">Total Expenses</p>
             </div>
           </CardContent>
@@ -167,7 +168,7 @@ export function ExpenseAnalytics({
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">${safeData?.averageExpense?.toFixed(0) || "0"}</p>
+              <p className="text-2xl font-bold text-purple-600">{formatCurrency(safeData?.averageExpense || 0)}</p>
               <p className="text-sm text-gray-600">Average Expense</p>
             </div>
           </CardContent>
@@ -344,7 +345,7 @@ export function ExpenseAnalytics({
                       <span className="font-medium">{franchise.name}</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold">${franchise.value.toLocaleString()}</div>
+                      <div className="font-bold">{formatCurrency(franchise.value)}</div>
                       <div className="text-sm text-gray-500">{franchise.count} expenses</div>
                     </div>
                   </div>
@@ -398,7 +399,7 @@ export function ExpenseAnalytics({
                       <span className="font-medium">{category.name}</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold">${category.value.toLocaleString()}</div>
+                      <div className="font-bold">{formatCurrency(category.value)}</div>
                       <div className="text-sm text-gray-500">{category.count} expenses</div>
                     </div>
                   </div>
@@ -434,7 +435,7 @@ export function ExpenseAnalytics({
                     <td className="p-2">{expense.description}</td>
                     <td className="p-2">{expense.subaccount?.name || "Unknown"}</td>
                     <td className="p-2">{expense.category}</td>
-                    <td className="p-2 font-medium">${expense.amount}</td>
+                    <td className="p-2 font-medium">{formatCurrency(expense.amount)}</td>
                     <td className="p-2">
                       <Badge className="bg-green-100 text-green-800">Completed</Badge>
                     </td>

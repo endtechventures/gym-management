@@ -19,7 +19,7 @@ interface Currency {
 }
 
 export default function SettingsPage() {
-  const { currentAccountId, refreshData } = useGym()
+  const { currentAccountId, refreshData, refreshCurrency } = useGym()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -100,7 +100,10 @@ export default function SettingsPage() {
 
       await updateAccount(currentAccountId, accountUpdateData)
 
-      // Refresh the context to update currency if changed
+      // Refresh currency immediately for real-time updates
+      await refreshCurrency()
+
+      // Refresh the context
       refreshData()
 
       toast({

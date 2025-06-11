@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Line, LineChart, Bar, BarChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts"
+import { formatCurrency } from "@/lib/currency"
 
 interface OverviewAnalyticsProps {
   data: any
@@ -232,7 +233,7 @@ export function OverviewAnalytics({ data, dateRange, selectedFranchise, franchis
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-600">Net Profit</span>
                 <span className={`font-bold ${netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  ${netProfit.toLocaleString()}
+                  {formatCurrency(netProfit)}
                 </span>
               </div>
             </div>
@@ -247,11 +248,11 @@ export function OverviewAnalytics({ data, dateRange, selectedFranchise, franchis
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-600">Revenue per Member</span>
-                <span className="font-bold text-green-600">${revenuePerMember.toFixed(0)}</span>
+                <span className="font-bold text-green-600">{formatCurrency(revenuePerMember)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-600">Expense per Member</span>
-                <span className="font-bold text-red-600">${expensePerMember.toFixed(0)}</span>
+                <span className="font-bold text-red-600">{formatCurrency(expensePerMember)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-600">Active Rate</span>
@@ -396,10 +397,10 @@ export function OverviewAnalytics({ data, dateRange, selectedFranchise, franchis
                 {franchisePerformanceData.map((franchise) => (
                   <tr key={franchise.name} className="border-b">
                     <td className="p-2 font-medium">{franchise.name}</td>
-                    <td className="p-2">${franchise.revenue.toLocaleString()}</td>
-                    <td className="p-2">${franchise.expenses.toLocaleString()}</td>
+                    <td className="p-2">{formatCurrency(franchise.revenue)}</td>
+                    <td className="p-2">{formatCurrency(franchise.expenses)}</td>
                     <td className={`p-2 ${franchise.profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      ${franchise.profit.toLocaleString()}
+                      {formatCurrency(franchise.profit)}
                     </td>
                     <td className="p-2">{franchise.members}</td>
                     <td className={`p-2 ${franchise.profitMargin >= 0 ? "text-green-600" : "text-red-600"}`}>

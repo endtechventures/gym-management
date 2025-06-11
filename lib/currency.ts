@@ -7,6 +7,82 @@ export interface CurrencyInfo {
   id?: string
 }
 
+// Global state for current account ID and currency
+let globalCurrentAccountId: string | null = null
+let globalCurrentCurrency: CurrencyInfo | null = null
+let currencyChangeListeners: Array<(currency: CurrencyInfo) => void> = []
+
+/**
+ * Subscribe to currency changes
+ * @param listener - Function to call when currency changes
+ * @returns Unsubscribe function
+ */
+export function subscribeToCurrencyChanges(listener: (currency: CurrencyInfo) => void): () => void {
+  currencyChangeListeners.push(listener)
+
+  // Immediately call with current currency if available
+  if (globalCurrentCurrency) {
+    listener(globalCurrentCurrency)
+  }
+
+  return () => {
+    currencyChangeListeners = currencyChangeListeners.filter((l) => l !== listener)
+  }
+}
+
+/**
+ * Notify all listeners of currency change
+ */
+function notifyCurrencyChange(currency: CurrencyInfo): void {
+  globalCurrentCurrency = currency
+  currencyChangeListeners.forEach((listener) => {
+    try {
+      listener(currency)
+    } catch (error) {
+      console.error("Error in currency change listener:", error)
+    }
+  })
+}
+
+/**
+ * Set the global current account ID and fetch its currency
+ * @param accountId - The current account ID
+ */
+export async function setGlobalAccountId(accountId: string | null): Promise<void> {
+  if (globalCurrentAccountId === accountId) return
+
+  globalCurrentAccountId = accountId
+
+  if (accountId) {
+    try {
+      const currency = await getAccountCurrency(accountId)
+      notifyCurrencyChange(currency)
+    } catch (error) {
+      console.error("Error fetching currency for account:", error)
+      notifyCurrencyChange(DEFAULT_CURRENCY)
+    }
+  } else {
+    globalCurrentCurrency = null
+  }
+}
+
+/**
+ * Force refresh the current account's currency (for real-time updates)
+ */
+export async function refreshCurrentAccountCurrency(): Promise<void> {
+  if (globalCurrentAccountId) {
+    // Clear cache for current account
+    accountCurrencyCache.delete(globalCurrentAccountId)
+
+    try {
+      const currency = await getAccountCurrency(globalCurrentAccountId)
+      notifyCurrencyChange(currency)
+    } catch (error) {
+      console.error("Error refreshing currency:", error)
+    }
+  }
+}
+
 // Default currency mapping
 export const CURRENCIES: Record<string, CurrencyInfo> = {
   INR: {
@@ -48,6 +124,7 @@ export async function getAccountCurrency(accountId: string): Promise<CurrencyInf
 
     if (accountError || !account?.currency_id) {
       console.warn("Failed to fetch account currency, using default:", accountError)
+      accountCurrencyCache.set(accountId, DEFAULT_CURRENCY)
       return DEFAULT_CURRENCY
     }
 
@@ -60,6 +137,7 @@ export async function getAccountCurrency(accountId: string): Promise<CurrencyInf
 
     if (currencyError || !currency) {
       console.warn("Failed to fetch currency details, using default:", currencyError)
+      accountCurrencyCache.set(accountId, DEFAULT_CURRENCY)
       return DEFAULT_CURRENCY
     }
 
@@ -75,28 +153,38 @@ export async function getAccountCurrency(accountId: string): Promise<CurrencyInf
     return currencyInfo
   } catch (error) {
     console.error("Error fetching account currency:", error)
+    accountCurrencyCache.set(accountId, DEFAULT_CURRENCY)
     return DEFAULT_CURRENCY
   }
 }
 
 /**
- * Format amount with currency symbol
+ * Format amount with currency symbol (uses current account's currency)
  * @param amount - The amount to format
- * @param currencyCode - The currency code (defaults to INR)
+ * @param currencyCode - Optional currency code override
  * @param showCode - Whether to show currency code alongside symbol
  */
-export function formatCurrency(amount: number | string, currencyCode = "INR", showCode = false): string {
+export function formatCurrency(amount: number | string, currencyCode?: string, showCode = false): string {
   const numAmount = typeof amount === "string" ? Number.parseFloat(amount) : amount
 
   if (isNaN(numAmount)) {
-    return `${CURRENCIES[currencyCode]?.symbol || "₹"}0`
+    const symbol = currencyCode ? CURRENCIES[currencyCode]?.symbol || "₹" : globalCurrentCurrency?.symbol || "₹"
+    return `${symbol}0`
   }
 
-  const currency = CURRENCIES[currencyCode] || DEFAULT_CURRENCY
+  let currency: CurrencyInfo
 
-  // Format number with Indian locale for INR
+  if (currencyCode) {
+    currency = CURRENCIES[currencyCode] || DEFAULT_CURRENCY
+  } else if (globalCurrentCurrency) {
+    currency = globalCurrentCurrency
+  } else {
+    currency = DEFAULT_CURRENCY
+  }
+
+  // Format number with appropriate locale
   const formattedAmount =
-    currencyCode === "INR"
+    currency.code === "INR"
       ? numAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })
       : numAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })
 
@@ -104,11 +192,15 @@ export function formatCurrency(amount: number | string, currencyCode = "INR", sh
 }
 
 /**
- * Get currency symbol
- * @param currencyCode - The currency code (defaults to INR)
+ * Get currency symbol (uses current account's currency)
+ * @param currencyCode - Optional currency code override
  */
-export function getCurrencySymbol(currencyCode = "INR"): string {
-  return CURRENCIES[currencyCode]?.symbol || DEFAULT_CURRENCY.symbol
+export function getCurrencySymbol(currencyCode?: string): string {
+  if (currencyCode) {
+    return CURRENCIES[currencyCode]?.symbol || DEFAULT_CURRENCY.symbol
+  }
+
+  return globalCurrentCurrency?.symbol || DEFAULT_CURRENCY.symbol
 }
 
 /**

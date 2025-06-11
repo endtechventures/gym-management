@@ -18,6 +18,8 @@ import {
   Loader2,
   Check,
   X,
+  Users,
+  UserCheck,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -28,7 +30,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -96,9 +98,18 @@ interface Invitation {
   token: string
 }
 
+interface SearchResult {
+  id: string
+  name: string
+  email: string
+  type: "member" | "staff"
+  role?: string
+  status?: string
+}
+
 export function Header({ setSidebarOpen, onNotificationClick }: HeaderProps) {
   const router = useRouter()
-  const { setCurrentContext } = useGymContext()
+  const { setCurrentContext, currentSubaccountId } = useGymContext()
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>([])
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
   const [selectedSubaccount, setSelectedSubaccount] = useState<Subaccount | null>(null)
@@ -117,9 +128,213 @@ export function Header({ setSidebarOpen, onNotificationClick }: HeaderProps) {
     location: "",
   })
 
+  // Search functionality state
+  const [searchTerm, setSearchTerm] = useState("")
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSearchResults, setShowSearchResults] = useState(false)
+  const searchTimeoutRef = useRef<NodeJS.Timeout>()
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     loadUserData()
     loadInvitations()
+  }, [])
+
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    (term: string) => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+
+      searchTimeoutRef.current = setTimeout(() => {
+        if (term.trim().length >= 2 && currentSubaccountId) {
+          performSearch(term.trim())
+        } else if (term.trim().length === 0) {
+          setSearchResults([])
+          setShowSearchResults(false)
+        }
+      }, 300)
+    },
+    [currentSubaccountId],
+  )
+
+  // Perform the actual search
+  const performSearch = async (term: string) => {
+    if (!currentSubaccountId) return
+
+    try {
+      setIsSearching(true)
+      setShowSearchResults(true) // Show dropdown immediately
+      const results: SearchResult[] = []
+
+      console.log("Searching for:", term, "in subaccount:", currentSubaccountId) // Debug log
+
+      // Search members with more flexible matching
+      const { data: members, error: membersError } = await supabase
+        .from("members")
+        .select("id, name, email, is_active")
+        .eq("subaccount_id", currentSubaccountId)
+        .ilike("name", `%${term}%`)
+        .limit(10)
+
+      console.log("Members found:", members, "Error:", membersError) // Debug log
+
+      if (!membersError && members && members.length > 0) {
+        results.push(
+          ...members.map((member) => ({
+            id: member.id,
+            name: member.name,
+            email: member.email || "",
+            type: "member" as const,
+            status: member.is_active ? "Active" : "Inactive",
+          })),
+        )
+      }
+
+      // Also search by email if no name matches found
+      if (results.length === 0) {
+        const { data: membersByEmail, error: membersEmailError } = await supabase
+          .from("members")
+          .select("id, name, email, is_active")
+          .eq("subaccount_id", currentSubaccountId)
+          .ilike("email", `%${term}%`)
+          .limit(10)
+
+        if (!membersEmailError && membersByEmail) {
+          results.push(
+            ...membersByEmail.map((member) => ({
+              id: member.id,
+              name: member.name,
+              email: member.email || "",
+              type: "member" as const,
+              status: member.is_active ? "Active" : "Inactive",
+            })),
+          )
+        }
+      }
+
+      // Search staff (users table) with more flexible matching
+      const { data: staff, error: staffError } = await supabase
+        .from("users")
+        .select(`
+  id,
+  name,
+  email,
+  is_active,
+  role:roles(name)
+`)
+        .eq("subaccount_id", currentSubaccountId)
+        .ilike("name", `%${term}%`)
+        .limit(10)
+
+      console.log("Staff found:", staff, "Error:", staffError) // Debug log
+
+      if (!staffError && staff && staff.length > 0) {
+        results.push(
+          ...staff.map((staffMember) => ({
+            id: staffMember.id,
+            name: staffMember.name,
+            email: staffMember.email || "",
+            type: "staff" as const,
+            role: staffMember.role?.name || "Staff",
+            status: staffMember.is_active ? "Active" : "Inactive",
+          })),
+        )
+      }
+
+      // Also search staff by email if no name matches found
+      if (results.filter((r) => r.type === "staff").length === 0) {
+        const { data: staffByEmail, error: staffEmailError } = await supabase
+          .from("users")
+          .select(`
+    id,
+    name,
+    email,
+    is_active,
+    role:roles(name)
+  `)
+          .eq("subaccount_id", currentSubaccountId)
+          .ilike("email", `%${term}%`)
+          .limit(10)
+
+        if (!staffEmailError && staffByEmail) {
+          results.push(
+            ...staffByEmail.map((staffMember) => ({
+              id: staffMember.id,
+              name: staffMember.name,
+              email: staffMember.email || "",
+              type: "staff" as const,
+              role: staffMember.role?.name || "Staff",
+              status: staffMember.is_active ? "Active" : "Inactive",
+            })),
+          )
+        }
+      }
+
+      console.log("Total results:", results) // Debug log
+      setSearchResults(results)
+      // Keep dropdown visible even if no results
+    } catch (error) {
+      console.error("Search error:", error)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Handle search input change
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    debouncedSearch(value)
+  }
+
+  // Handle search result click
+  const handleSearchResultClick = (result: SearchResult) => {
+    if (result.type === "member") {
+      router.push(`/dashboard/members/${result.id}`)
+    } else if (result.type === "staff") {
+      router.push(`/dashboard/staff`) // Could be enhanced to go to specific staff member page
+    }
+
+    // Clear search
+    setSearchTerm("")
+    setSearchResults([])
+    setShowSearchResults(false)
+    if (searchInputRef.current) {
+      searchInputRef.current.blur()
+    }
+  }
+
+  // Handle search input focus/blur
+  const handleSearchFocus = () => {
+    if (searchTerm.length >= 2) {
+      performSearch(searchTerm)
+    }
+  }
+
+  const handleSearchBlur = () => {
+    // Don't hide results immediately to allow clicking
+    // The onMouseDown event will handle the click before blur
+  }
+
+  // Clear search when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (searchInputRef.current && !searchInputRef.current.contains(target)) {
+        // Check if click is on search results
+        const searchResults = document.querySelector("[data-search-results]")
+        if (!searchResults || !searchResults.contains(target)) {
+          setShowSearchResults(false)
+        }
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
   }, [])
 
   const loadUserData = async () => {
@@ -875,13 +1090,85 @@ export function Header({ setSidebarOpen, onNotificationClick }: HeaderProps) {
             )}
           </div>
 
-          {/* Search */}
+          {/* Enhanced Search with Results */}
           <div className="relative flex flex-1 items-center">
             <Search className="pointer-events-none absolute left-3 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search members, trainers, classes..."
+              ref={searchInputRef}
+              placeholder="Search members, staff..."
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
               className="w-full border-0 bg-gray-50 pl-10 pr-4 text-gray-900 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-teal-500"
             />
+
+            {/* Search Results Dropdown */}
+            {(showSearchResults || isSearching) && searchTerm.length >= 2 && (
+              <div
+                data-search-results
+                className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[60] max-h-80 overflow-y-auto"
+              >
+                {isSearching ? (
+                  <div className="p-4 text-center">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                    <span className="text-sm text-gray-500">Searching...</span>
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="py-2">
+                    {searchResults.map((result) => (
+                      <button
+                        key={`${result.type}-${result.id}`}
+                        onMouseDown={(e) => {
+                          e.preventDefault() // Prevent blur from firing before click
+                          handleSearchResultClick(result)
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center space-x-3 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex-shrink-0">
+                          {result.type === "member" ? (
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <User className="h-4 w-4 text-blue-600" />
+                            </div>
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                              <UserCheck className="h-4 w-4 text-green-600" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm font-medium text-gray-900 truncate">{result.name}</p>
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${
+                                result.type === "member"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-green-50 text-green-700 border-green-200"
+                              }`}
+                            >
+                              {result.type === "member" ? "Member" : "Staff"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500 truncate">{result.email}</p>
+                          {result.status && (
+                            <p className={`text-xs ${result.status === "Active" ? "text-green-600" : "text-gray-500"}`}>
+                              {result.status}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-gray-500">
+                    <Users className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No results found</p>
+                    <p className="text-xs">Try searching by name, email, or ID</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-x-4 lg:gap-x-6">

@@ -1,8 +1,16 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
-import { formatCurrency, DEFAULT_CURRENCY, type CurrencyInfo, getAccountCurrency } from "./currency"
+import { createContext, useContext, useState, useEffect, useCallback } from "react"
+import {
+  formatCurrency,
+  DEFAULT_CURRENCY,
+  type CurrencyInfo,
+  setGlobalAccountId,
+  getCurrencySymbol,
+  subscribeToCurrencyChanges,
+  refreshCurrentAccountCurrency,
+} from "./currency"
 
 interface Account {
   id: string
@@ -32,6 +40,7 @@ interface GymContextType {
   currentCurrency: CurrencyInfo
   formatAmount: (amount: number | string) => string
   getCurrencySymbol: () => string
+  refreshCurrency: () => Promise<void>
 }
 
 const GymContext = createContext<GymContextType | undefined>(undefined)
@@ -42,51 +51,47 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
   const [currentAccount, setCurrentAccount] = useState<Account | null>(null)
   const [currentSubaccount, setCurrentSubaccount] = useState<Subaccount | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [refreshCounter, setRefreshCounter] = useState(0)
   const [contextVersion, setContextVersion] = useState(0)
   const [currentCurrency, setCurrentCurrency] = useState<CurrencyInfo>(DEFAULT_CURRENCY)
 
-  // Fetch currency when account changes
+  // Subscribe to currency changes for real-time updates
   useEffect(() => {
-    async function fetchCurrency() {
-      if (currentAccountId) {
-        try {
-          const currency = await getAccountCurrency(currentAccountId)
-          setCurrentCurrency(currency)
-        } catch (error) {
-          console.error("Error fetching currency:", error)
-          // Keep default currency on error
-        }
-      }
-    }
+    const unsubscribe = subscribeToCurrencyChanges((currency) => {
+      setCurrentCurrency(currency)
+      // Force re-render of components that use currency
+      setContextVersion((prev) => prev + 1)
+    })
 
+    return unsubscribe
+  }, [])
+
+  // Set global account ID when current account changes
+  useEffect(() => {
     if (currentAccountId) {
-      fetchCurrency()
+      setGlobalAccountId(currentAccountId)
     }
   }, [currentAccountId])
 
+  // Load initial data from localStorage
   useEffect(() => {
-    // Load from localStorage on mount
     const accountId = localStorage.getItem("current_account_id")
     const subaccountId = localStorage.getItem("current_subaccount_id")
-
-    console.log("Loading from localStorage:", { accountId, subaccountId })
 
     if (accountId && subaccountId) {
       setCurrentAccountId(accountId)
       setCurrentSubaccountId(subaccountId)
 
-      // Create mock objects for immediate use with default currency
+      // Set placeholder data immediately to reduce flickering
       setCurrentAccount({
         id: accountId,
-        name: "Current Gym",
+        name: "Loading...",
         email: "",
         phone: "",
         currency: DEFAULT_CURRENCY,
       })
       setCurrentSubaccount({
         id: subaccountId,
-        name: "Current Location",
+        name: "Loading...",
         location: "",
         account_id: accountId,
       })
@@ -95,58 +100,58 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const setCurrentContext = (accountId: string, subaccountId: string) => {
-    console.log("Setting current context:", { accountId, subaccountId })
+  const setCurrentContext = useCallback(
+    (accountId: string, subaccountId: string) => {
+      // Only update if the context actually changed
+      if (currentAccountId === accountId && currentSubaccountId === subaccountId) {
+        return
+      }
 
-    // Only update if the context actually changed
-    if (currentAccountId === accountId && currentSubaccountId === subaccountId) {
-      console.log("Context unchanged, skipping update")
-      return
-    }
+      // Update state immediately to reduce flickering
+      setCurrentAccountId(accountId)
+      setCurrentSubaccountId(subaccountId)
+      localStorage.setItem("current_account_id", accountId)
+      localStorage.setItem("current_subaccount_id", subaccountId)
 
-    setIsLoading(true)
-    setCurrentAccountId(accountId)
-    setCurrentSubaccountId(subaccountId)
-    localStorage.setItem("current_account_id", accountId)
-    localStorage.setItem("current_subaccount_id", subaccountId)
+      // Set placeholder data immediately
+      setCurrentAccount({
+        id: accountId,
+        name: "Loading...",
+        email: "",
+        phone: "",
+        currency: DEFAULT_CURRENCY,
+      })
+      setCurrentSubaccount({
+        id: subaccountId,
+        name: "Loading...",
+        location: "",
+        account_id: accountId,
+      })
 
-    // Set mock objects for immediate use with default currency
-    setCurrentAccount({
-      id: accountId,
-      name: "Current Gym",
-      email: "",
-      phone: "",
-      currency: DEFAULT_CURRENCY,
-    })
-    setCurrentSubaccount({
-      id: subaccountId,
-      name: "Current Location",
-      location: "",
-      account_id: accountId,
-    })
+      // Increment context version to trigger re-renders
+      setContextVersion((prev) => prev + 1)
+    },
+    [currentAccountId, currentSubaccountId],
+  )
 
-    // Increment context version to force re-renders
+  const refreshData = useCallback(() => {
     setContextVersion((prev) => prev + 1)
+  }, [])
 
-    // Trigger a refresh of data without full page reload
-    setTimeout(() => {
-      setRefreshCounter((prev) => prev + 1)
-      setIsLoading(false)
-    }, 100) // Reduced delay for faster switching
-  }
+  const refreshCurrency = useCallback(async () => {
+    await refreshCurrentAccountCurrency()
+  }, [])
 
-  const refreshData = () => {
-    setRefreshCounter((prev) => prev + 1)
-    setContextVersion((prev) => prev + 1)
-  }
+  const formatAmount = useCallback(
+    (amount: number | string) => {
+      return formatCurrency(amount)
+    },
+    [currentCurrency],
+  )
 
-  const formatAmount = (amount: number | string) => {
-    return formatCurrency(amount, currentCurrency.code)
-  }
-
-  const getCurrencySymbol = () => {
-    return currentCurrency.symbol
-  }
+  const getCurrencySymbolValue = useCallback(() => {
+    return getCurrencySymbol()
+  }, [currentCurrency])
 
   return (
     <GymContext.Provider
@@ -161,7 +166,8 @@ export function GymProvider({ children }: { children: React.ReactNode }) {
         contextVersion,
         currentCurrency,
         formatAmount,
-        getCurrencySymbol,
+        getCurrencySymbol: getCurrencySymbolValue,
+        refreshCurrency,
       }}
     >
       {children}

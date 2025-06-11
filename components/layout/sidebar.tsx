@@ -27,6 +27,10 @@ import {
   UserPlus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useEffect, useState } from "react"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import type { User } from "@supabase/auth-helpers-nextjs"
+import { useGym } from "@/lib/gym-context"
 
 interface SidebarProps {
   open: boolean
@@ -35,6 +39,41 @@ interface SidebarProps {
 
 export function Sidebar({ open, setOpen }: SidebarProps) {
   const pathname = usePathname()
+
+  const { currentGym } = useGym()
+  const [user, setUser] = useState<User | null>(null)
+  const [userProfile, setUserProfile] = useState<{ full_name?: string; role?: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const supabase = createClientComponentClient()
+
+  useEffect(() => {
+    const getUser = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        setUser(user)
+
+        if (user && currentGym?.id) {
+          // Fetch user profile and role for the current gym
+          const { data: profile } = await supabase
+            .from("gym_users")
+            .select("full_name, role")
+            .eq("user_id", user.id)
+            .eq("gym_id", currentGym.id)
+            .single()
+
+          setUserProfile(profile)
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getUser()
+  }, [supabase, currentGym?.id])
 
   const navigationGroups = [
     {
@@ -150,17 +189,7 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t border-gray-200">
-        <div className="flex items-center space-x-3">
-          <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-            <span className="text-sm font-medium text-gray-600">JD</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">John Doe</p>
-            <p className="text-xs text-gray-500 truncate">Gym Owner</p>
-          </div>
-        </div>
-      </div>
+      
     </div>
   )
 

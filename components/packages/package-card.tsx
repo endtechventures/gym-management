@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Package, Crown, Zap, Shield, Users, MoreVertical, Edit, Trash2, Star, Check, X } from "lucide-react"
 import type { MembershipPackage } from "@/types/gym"
+import { formatCurrency } from "@/lib/currency"
 
 interface PackageCardProps {
   package: MembershipPackage
@@ -128,7 +129,7 @@ export function PackageCard({ package: pkg, onEdit, onDelete }: PackageCardProps
         <div className="flex items-center justify-between mt-4">
           <div>
             <div className="flex items-baseline space-x-1">
-              <span className="text-3xl font-bold text-gray-900">${pkg.price}</span>
+              <span className="text-3xl font-bold text-gray-900">{formatCurrency(pkg.price)}</span>
               <span className="text-gray-500">
                 /{pkg.duration} {pkg.durationType}
               </span>
@@ -200,7 +201,7 @@ export function PackageCard({ package: pkg, onEdit, onDelete }: PackageCardProps
           <Button className={`w-full ${colorClasses.accent} hover:opacity-90`}>Select Package</Button>
           <div className="flex justify-between text-xs text-gray-500">
             <span>
-              Per {pkg.durationType.slice(0, -1)}: ${(pkg.price / pkg.duration).toFixed(2)}
+              Per {pkg.durationType.slice(0, -1)}: {formatCurrency(pkg.price / pkg.duration)}
             </span>
             <span>Renewal: Auto</span>
           </div>

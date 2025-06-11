@@ -1,7 +1,5 @@
 "use client"
-
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import {
@@ -17,15 +15,9 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrency } from "@/lib/currency"
 import { Badge } from "@/components/ui/badge"
-
-interface PaymentAnalyticsProps {
-  data: any
-  dateRange: any
-  onDateRangeChange: (range: any) => void
-  selectedFranchise: string
-  franchises: any[]
-}
 
 const COLORS = [
   "#0088FE",
@@ -39,6 +31,24 @@ const COLORS = [
   "#4D96FF",
   "#9D4EDD",
 ]
+
+interface PaymentAnalyticsData {
+  totalAmount: number
+  totalCount: number
+  payments: any[]
+  paymentsByMonth: any
+  paymentsByPlan: any
+  paymentsByFranchise: any
+  averagePayment: number
+}
+
+interface PaymentAnalyticsProps {
+  data: PaymentAnalyticsData | undefined | null
+  dateRange: any
+  onDateRangeChange: (range: any) => void
+  selectedFranchise: string
+  franchises: any[]
+}
 
 export function PaymentAnalytics({
   data,
@@ -152,7 +162,7 @@ export function PaymentAnalytics({
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">${safeData?.totalAmount?.toLocaleString() || "0"}</p>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(safeData?.totalAmount || 0)}</p>
               <p className="text-sm text-gray-600">Total Revenue</p>
             </div>
           </CardContent>
@@ -170,7 +180,7 @@ export function PaymentAnalytics({
         <Card>
           <CardContent className="p-6">
             <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">${safeData?.averagePayment?.toFixed(0) || "0"}</p>
+              <p className="text-2xl font-bold text-purple-600">{formatCurrency(safeData?.averagePayment || 0)}</p>
               <p className="text-sm text-gray-600">Average Payment</p>
             </div>
           </CardContent>
@@ -347,7 +357,7 @@ export function PaymentAnalytics({
                       <span className="font-medium">{franchise.name}</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold">${franchise.value.toLocaleString()}</div>
+                      <div className="font-bold">{formatCurrency(franchise.value)}</div>
                       <div className="text-sm text-gray-500">{franchise.count} payments</div>
                     </div>
                   </div>
@@ -401,7 +411,7 @@ export function PaymentAnalytics({
                       <span className="font-medium">{plan.name}</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold">${plan.value.toLocaleString()}</div>
+                      <div className="font-bold">{formatCurrency(plan.value)}</div>
                       <div className="text-sm text-gray-500">{plan.count} payments</div>
                     </div>
                   </div>
@@ -438,7 +448,7 @@ export function PaymentAnalytics({
                     <td className="p-2">{payment.member?.name}</td>
                     <td className="p-2">{payment.franchiseName || "Unknown"}</td>
                     <td className="p-2">{payment.plan?.name || "N/A"}</td>
-                    <td className="p-2 font-medium">${payment.final_amount}</td>
+                    <td className="p-2 font-medium">{formatCurrency(payment.final_amount)}</td>
                     <td className="p-2">{payment.payment_method?.name || "N/A"}</td>
                     <td className="p-2">
                       <Badge className="bg-green-100 text-green-800">Completed</Badge>
@@ -453,3 +463,5 @@ export function PaymentAnalytics({
     </div>
   )
 }
+
+export default PaymentAnalytics
