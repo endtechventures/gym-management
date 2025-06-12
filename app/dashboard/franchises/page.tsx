@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, Edit, Trash2, Eye, Users, DollarSign, MapPin, Loader2, Plus, Store, CreditCard, ExternalLink, MoreHorizontal } from "lucide-react"
+import { Search, Edit, Trash2, Users, DollarSign, MapPin, Loader2, Plus, Store, MoreHorizontal } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { EditFranchiseModal } from "@/components/franchises/edit-franchise-modal"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -16,6 +16,7 @@ import { useGymContext } from "@/lib/gym-context"
 import { getCurrencySymbol } from "@/lib/currency"
 import { toast } from "@/components/ui/use-toast"
 import { DropdownMenu, DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 
 interface Franchise {
   id: string
@@ -403,7 +404,10 @@ export default function FranchisesPage() {
       cell: ({ row }: any) => (
         <div className="flex items-center space-x-1">
           {/* <DollarSign className="h-4 w-4 text-gray-400" /> */}
-          <span>{getCurrencySymbol()}{row.original.revenue.toLocaleString()}</span>
+          <span>
+            {getCurrencySymbol()}
+            {row.original.revenue.toLocaleString()}
+          </span>
         </div>
       ),
     },
@@ -414,17 +418,19 @@ export default function FranchisesPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Open menu</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => handleEditFranchise(row.original)}>
               <Edit className="mr-2 h-4 w-4" />
-              Edit
+              Edit Franchise
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => handleDeleteFranchise(row.original.id)} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+              Delete Franchise
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -532,7 +538,10 @@ export default function FranchisesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">{getCurrencySymbol()}{totalRevenue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {getCurrencySymbol()}
+                  {totalRevenue.toLocaleString()}
+                </p>
               </div>
               <div className="p-3 rounded-2xl bg-teal-100 text-teal-600">
                 <DollarSign className="h-5 w-5" />
@@ -620,7 +629,10 @@ export default function FranchisesPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Revenue</span>
-                    <span className="text-sm font-medium">{getCurrencySymbol()}{franchise.revenue.toLocaleString()}</span>
+                    <span className="text-sm font-medium">
+                      {getCurrencySymbol()}
+                      {franchise.revenue.toLocaleString()}
+                    </span>
                   </div>
                 </div>
               </CardContent>

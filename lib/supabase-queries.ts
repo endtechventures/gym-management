@@ -316,5 +316,57 @@ export async function updateAccount(accountId: string, accountData: any) {
 }
 
 // Currency Functions
+// Member Import Functions
+export async function getMemberImports(subaccountId: string) {
+  const { data, error } = await supabase
+    .from("member_imports")
+    .select("*")
+    .eq("subaccount_id", subaccountId)
+    .order("created_at", { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export async function createMemberImport(importData: any) {
+  try {
+    const { data, error } = await supabase.from("member_imports").insert(importData).select().single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error("Error creating member import:", error)
+    throw error
+  }
+}
+
+export async function updateMemberImport(importId: string, updateData: any) {
+  try {
+    const { data, error } = await supabase
+      .from("member_imports")
+      .update(updateData)
+      .eq("id", importId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error("Error updating member import:", error)
+    throw error
+  }
+}
+
+export async function getMemberImportById(importId: string) {
+  try {
+    const { data, error } = await supabase.from("member_imports").select("*").eq("id", importId).single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error("Error getting member import:", error)
+    throw error
+  }
+}
 // Export the supabase client for direct use
 export { supabase }

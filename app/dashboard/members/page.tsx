@@ -11,6 +11,7 @@ import { useGymContext } from "@/lib/gym-context"
 import { getMembers } from "@/lib/supabase-queries"
 import { AddMemberModal } from "@/components/members/add-member-modal"
 import { EditMemberModal } from "@/components/members/edit-member-modal"
+import { ImportMembersModal } from "@/components/members/import-members-modal"
 import { DataTable } from "@/components/ui/data-table"
 import type { Member } from "@/types/database"
 import {
@@ -26,8 +27,15 @@ import {
   Mail,
   ExternalLink,
   Filter,
+  Upload,
 } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/currency"
@@ -44,6 +52,7 @@ export default function MembersPage() {
   const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>("all")
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [editModalTab, setEditModalTab] = useState("details")
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -168,6 +177,41 @@ export default function MembersPage() {
     router.push(`/dashboard/members/${member.id}`)
   }
 
+  const handleDeleteMember = async (member: Member) => {
+    if (!confirm(`Are you sure you want to delete ${member.name}? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase.from("members").delete().eq("id", member.id)
+
+      if (error) {
+        console.error("Error deleting member:", error)
+        toast({
+          title: "Error",
+          description: "Failed to delete member",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: "Success",
+        description: "Member deleted successfully",
+      })
+
+      loadMembers()
+      loadMonthlyRevenue()
+    } catch (error) {
+      console.error("Error deleting member:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    }
+  }
+
   const columns = [
     {
       header: "Member",
@@ -270,6 +314,7 @@ export default function MembersPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Open menu</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -286,7 +331,8 @@ export default function MembersPage() {
               <CreditCard className="mr-2 h-4 w-4" />
               Add Payment
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600">
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteMember(row.original)}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Member
             </DropdownMenuItem>
@@ -324,10 +370,20 @@ export default function MembersPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Members</h1>
-        <Button onClick={() => setShowAddModal(true)} className="bg-teal-600 hover:bg-teal-700">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Member
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setShowImportModal(true)}
+            variant="outline"
+            className="border-teal-600 text-teal-600 hover:bg-teal-50"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Members
+          </Button>
+          <Button onClick={() => setShowAddModal(true)} className="bg-teal-600 hover:bg-teal-700">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Member
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -462,6 +518,15 @@ export default function MembersPage() {
         }}
         member={selectedMember}
         initialTab={editModalTab}
+      />
+
+      <ImportMembersModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportCompleted={() => {
+          loadMembers()
+          loadMonthlyRevenue()
+        }}
       />
     </div>
   )
