@@ -29,7 +29,7 @@ interface ColumnMapping {
 interface PreviewData {
   headers: string[]
   rows: any[][]
-  allRows: any[][] // Store all rows for processing
+  allRows: any[][]
 }
 
 interface ImportJob {
@@ -266,35 +266,14 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
     return true
   }
 
-  // Helper function to create a member import record in the database
-  const createMemberImport = async (data: any) => {
-    try {
-      console.log("Creating member import with data:", data)
-      const { data: result, error } = await supabase.from("member_imports").insert(data).select().single()
-
-      if (error) {
-        console.error("Error creating member import:", error)
-        throw new Error(`Failed to create import record: ${error.message}`)
-      }
-
-      console.log("Member import created successfully:", result)
-      return result
-    } catch (error) {
-      console.error("Error in createMemberImport:", error)
-      throw error
-    }
-  }
-
   // Process the import data directly in the frontend
   const processImportData = async (
     importId: string,
     allRows: any[][],
-    headers: string[],
     mapping: ColumnMapping,
     subaccountId: string,
   ) => {
     try {
-      console.log("Starting local processing...")
       // Update status to processing
       await supabase.from("member_imports").update({ status: "processing" }).eq("id", importId)
 
@@ -394,10 +373,8 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
           completed_at: new Date().toISOString(),
         })
         .eq("id", importId)
-
-      console.log("Local processing completed successfully")
     } catch (error) {
-      console.error("Error in local processing:", error)
+      console.error("Error in processing:", error)
       await supabase
         .from("member_imports")
         .update({
@@ -422,13 +399,10 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         throw new Error("User not authenticated")
       }
 
-      console.log("Starting import process...")
-
       // 1. Upload the file to Supabase Storage
       const fileName = `${Date.now()}_${file.name}`
       const filePath = `${fileName}`
 
-      console.log("Uploading file to storage:", filePath)
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("member-imports")
         .upload(filePath, file, {
@@ -437,17 +411,13 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         })
 
       if (uploadError) {
-        console.error("Upload error:", uploadError)
         throw new Error(`Failed to upload file: ${uploadError.message}`)
       }
-
-      console.log("File uploaded successfully:", uploadData)
 
       // 2. Get the public URL for the uploaded file
       const { data: publicUrlData } = supabase.storage.from("member-imports").getPublicUrl(filePath)
 
       const fileUrl = publicUrlData.publicUrl
-      console.log("File public URL:", fileUrl)
 
       // 3. Create an import job record in the database
       const importData = {
@@ -460,15 +430,15 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         column_mapping: columnMapping,
       }
 
-      console.log("Creating import job with data:", importData)
+      const { data: importJobData, error: importJobError } = await supabase
+        .from("member_imports")
+        .insert(importData)
+        .select()
+        .single()
 
-      const importJobData = await createMemberImport(importData)
-
-      if (!importJobData) {
+      if (importJobError || !importJobData) {
         throw new Error("Failed to create import job")
       }
-
-      console.log("Import job created:", importJobData)
 
       // 4. Set the import job in state to start polling
       setImportJob({
@@ -489,7 +459,7 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         description: "Your data is being processed. You can monitor the progress here.",
       })
 
-      processImportData(importJobData.id, previewData.allRows, previewData.headers, columnMapping, currentSubaccountId)
+      processImportData(importJobData.id, previewData.allRows, columnMapping, currentSubaccountId)
     } catch (error) {
       console.error("Import error:", error)
       toast({
