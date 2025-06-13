@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +24,34 @@ export default function AuthPage() {
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [defaultCurrencyId, setDefaultCurrencyId] = useState<string | null>(null)
+
+  // Fetch the default currency ID on component mount
+  useEffect(() => {
+    async function fetchDefaultCurrency() {
+      try {
+        const { data, error } = await supabase
+          .from("currency")
+          .select("id")
+          .order("code", { ascending: true })
+          .limit(1)
+          .single()
+
+        if (error) {
+          console.error("Error fetching default currency:", error)
+          return
+        }
+
+        if (data) {
+          setDefaultCurrencyId(data.id)
+        }
+      } catch (err) {
+        console.error("Error in fetchDefaultCurrency:", err)
+      }
+    }
+
+    fetchDefaultCurrency()
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,6 +132,12 @@ export default function AuthPage() {
       return
     }
 
+    if (!defaultCurrencyId) {
+      setError("System configuration error: No default currency found")
+      setIsLoading(false)
+      return
+    }
+
     try {
       // 1. Create user in Supabase Auth
       const { data, error } = await supabase.auth.signUp({
@@ -166,54 +200,70 @@ export default function AuthPage() {
         }
 
         // 4. Create initial account with onboarding_completed = false
-        // This is just a placeholder account that will be updated during onboarding
-        const { data: accountData, error: accountError } = await supabase
-          .from("accounts")
-          .insert({
-            name: `${signupName}'s Gym`, // Temporary name
+        try {
+          console.log("Creating initial account with currency_id:", defaultCurrencyId)
+          const { data: accountData, error: accountError } = await supabase
+            .from("accounts")
+            .insert({
+              name: `${signupName}'s Gym`, // Temporary name
+              email: signupEmail,
+              onboarding_completed: false, // Key: Not completed yet
+              // Add default values for any required fields
+              phone: "",
+              address: "",
+              description: "",
+              currency_id: defaultCurrencyId, // Use the fetched UUID
+            })
+            .select()
+            .single()
+
+          if (accountError) {
+            console.error("Account creation error:", accountError)
+            setError(`Error creating initial account: ${accountError.message}`)
+            return
+          }
+
+          console.log("Account created successfully:", accountData)
+
+          // 5. Create user in users table
+          const { error: userError } = await supabase.from("users").insert({
+            id: data.user.id,
+            name: signupName,
             email: signupEmail,
-            onboarding_completed: false, // Key: Not completed yet
+            role_id: ownerRole.id,
+            is_active: true,
           })
-          .select()
-          .single()
 
-        if (accountError) {
-          setError("Error creating initial account")
-          return
+          if (userError) {
+            console.error("User creation error:", userError)
+            setError(`Error creating user record: ${userError.message}`)
+            return
+          }
+
+          // 6. Create user_account record linking user to the placeholder account
+          const { error: userAccountError } = await supabase.from("user_accounts").insert({
+            user_id: data.user.id,
+            account_id: accountData.id,
+            role_id: ownerRole.id,
+            is_owner: true,
+          })
+
+          if (userAccountError) {
+            console.error("User account link error:", userAccountError)
+            setError(`Error linking user to account: ${userAccountError.message}`)
+            return
+          }
+
+          // After successful signup, redirect to onboarding
+          router.push("/onboarding")
+        } catch (err: any) {
+          console.error("Detailed error:", err)
+          setError(`Account creation failed: ${err.message || "Unknown error"}`)
         }
-
-        // 5. Create user in users table
-        const { error: userError } = await supabase.from("users").insert({
-          id: data.user.id,
-          name: signupName,
-          email: signupEmail,
-          role_id: ownerRole.id,
-          is_active: true,
-        })
-
-        if (userError) {
-          setError("Error creating user record")
-          return
-        }
-
-        // 6. Create user_account record linking user to the placeholder account
-        const { error: userAccountError } = await supabase.from("user_accounts").insert({
-          user_id: data.user.id,
-          account_id: accountData.id,
-          role_id: ownerRole.id,
-          is_owner: true,
-        })
-
-        if (userAccountError) {
-          setError("Error linking user to account")
-          return
-        }
-
-        // After successful signup, redirect to onboarding
-        router.push("/onboarding")
       }
-    } catch (err) {
-      setError("An unexpected error occurred")
+    } catch (err: any) {
+      console.error("Signup error:", err)
+      setError(`An unexpected error occurred: ${err.message || "Unknown error"}`)
     } finally {
       setIsLoading(false)
     }
