@@ -37,6 +37,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Supabase
-/supabase/functions/
-supabase/functions/
+# Supabase Edge Functions - completely exclude these
+/supabase/
+supabase/
