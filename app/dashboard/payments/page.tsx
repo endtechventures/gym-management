@@ -2,10 +2,24 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Plus, CreditCard, DollarSign, MoreHorizontal, Edit, Trash2, Eye, FileText, Clock } from "lucide-react"
+import {
+  Plus,
+  Search,
+  Download,
+  CreditCard,
+  DollarSign,
+  TrendingUp,
+  Calendar,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  Eye,
+  FileText,
+} from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { AddPaymentModal } from "@/components/payments/add-payment-modal"
 import { useGymContext } from "@/lib/gym-context"
@@ -14,7 +28,6 @@ import type { Payment } from "@/types/database"
 import { DashboardSkeleton } from "@/components/dashboard/skeleton-loader"
 import { formatCurrency } from "@/lib/currency"
 import { CreatePlanModal } from "@/components/packages/create-plan-modal"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
 
 export default function PaymentsPage() {
@@ -55,9 +68,9 @@ export default function PaymentsPage() {
 
   const filteredPayments = payments.filter((payment) => {
     const matchesSearch =
-      payment.member?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.plan?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.payment_method?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      payment.member?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.plan?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.payment_method?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     return matchesSearch
   })
 
@@ -210,111 +223,99 @@ export default function PaymentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Payments</h1>
-          <p className="text-gray-600">Manage payments, invoices, and subscription plans</p>
+          <p className="text-gray-600">Track and manage all payment transactions</p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)} className="bg-teal-600 hover:bg-teal-700">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Plan
-        </Button>
+        <div className="flex space-x-3">
+          <Button onClick={() => setShowCreateModal(true)} variant="outline" className="flex items-center">
+            <FileText className="mr-2 h-4 w-4" />
+            Add Plan
+          </Button>
+          <Button onClick={() => setShowAddModal(true)} className="bg-teal-600 hover:bg-teal-700">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Payment
+          </Button>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-          <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="space-y-6 pt-6">
-          {/* Stats Cards */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">$45,231.89</div>
-                <p className="text-xs text-muted-foreground">+20.1% from last month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Subscriptions</CardTitle>
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">+2350</div>
-                <p className="text-xs text-muted-foreground">+180.1% from last month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">+12,234</div>
-                <p className="text-xs text-muted-foreground">+19% from last month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Invoices</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">+573</div>
-                <p className="text-xs text-muted-foreground">+201 since last hour</p>
-              </CardContent>
-            </Card>
+      {/* Stats Cards */}
+      <div className="grid gap-6 md:grid-cols-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
+              </div>
+              <div className="p-3 rounded-2xl bg-green-100 text-green-600">
+                <DollarSign className="h-5 w-5" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">This Month</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(thisMonthRevenue)}</p>
+              </div>
+              <div className="p-3 rounded-2xl bg-blue-100 text-blue-600">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Payments</p>
+                <p className="text-2xl font-bold text-gray-900">{payments.length}</p>
+              </div>
+              <div className="p-3 rounded-2xl bg-purple-100 text-purple-600">
+                <CreditCard className="h-5 w-5" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Discounts</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalDiscount)}</p>
+              </div>
+              <div className="p-3 rounded-2xl bg-orange-100 text-orange-600">
+                <Calendar className="h-5 w-5" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Export */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search payments..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button variant="outline" onClick={exportCSV}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
           </div>
-
-          {/* More content for the overview tab */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">{/* Add more cards or content here */}</div>
-        </TabsContent>
-        <TabsContent value="invoices" className="space-y-6 pt-6">
-          {/* Invoices content */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Invoices</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Invoice content will go here.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="subscriptions" className="space-y-6 pt-6">
-          {/* Subscriptions content */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Subscriptions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Subscription content will go here.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="transactions" className="space-y-6 pt-6">
-          {/* Transactions content */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Transactions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Transaction content will go here.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Create Plan Modal */}
-      <CreatePlanModal
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onPlanCreated={handlePlanCreated}
-      />
+        </CardContent>
+      </Card>
 
       {/* Payments Table */}
       <Card>
@@ -344,7 +345,13 @@ export default function PaymentsPage() {
         </CardContent>
       </Card>
 
+      {/* Modals */}
       <AddPaymentModal open={showAddModal} onClose={() => setShowAddModal(false)} onPaymentAdded={handlePaymentAdded} />
+      <CreatePlanModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onPlanCreated={handlePlanCreated}
+      />
     </div>
   )
 }
