@@ -135,7 +135,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -157,36 +157,28 @@ export default function SettingsPage() {
         </Button>
       </div>
 
-      <div className="max-w-2xl">
-        {/* Gym Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Building className="h-5 w-5" />
-              <span>Gym Information</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="gymName">Gym Name *</Label>
-              <Input
-                id="gymName"
-                value={settings.gymName}
-                onChange={(e) => handleInputChange("gymName", e.target.value)}
-                placeholder="Enter gym name"
-              />
-            </div>
-            <div>
-              <Label htmlFor="address">Address</Label>
-              <Textarea
-                id="address"
-                value={settings.address}
-                onChange={(e) => handleInputChange("address", e.target.value)}
-                rows={2}
-                placeholder="Enter gym address"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+      {/* Gym Information */}
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Building className="h-5 w-5" />
+            <span>Gym Information</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="gymName">Gym Name *</Label>
+                <Input
+                  id="gymName"
+                  value={settings.gymName}
+                  onChange={(e) => handleInputChange("gymName", e.target.value)}
+                  placeholder="Enter gym name"
+                  className="mt-1"
+                />
+              </div>
+
               <div>
                 <Label htmlFor="phone">Phone</Label>
                 <Input
@@ -194,8 +186,40 @@ export default function SettingsPage() {
                   value={settings.phone}
                   onChange={(e) => handleInputChange("phone", e.target.value)}
                   placeholder="+1 (555) 123-4567"
+                  className="mt-1"
                 />
               </div>
+
+              <div>
+                <Label htmlFor="website">Website</Label>
+                <Input
+                  id="website"
+                  value={settings.website}
+                  onChange={(e) => handleInputChange("website", e.target.value)}
+                  placeholder="https://www.gym.com"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="currency">Currency</Label>
+                <select
+                  id="currency"
+                  value={settings.currency_id}
+                  onChange={(e) => handleInputChange("currency_id", e.target.value)}
+                  className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">Select Currency</option>
+                  {currencies.map((currency) => (
+                    <option key={currency.id} value={currency.id}>
+                      {currency.name} ({currency.symbol})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-4">
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -203,49 +227,38 @@ export default function SettingsPage() {
                   type="email"
                   value={settings.email}
                   disabled
-                  className="bg-gray-50 text-gray-500 cursor-not-allowed"
+                  className="bg-gray-50 text-gray-500 cursor-not-allowed mt-1"
                   placeholder="Email cannot be changed"
                 />
               </div>
+
+              <div>
+                <Label htmlFor="address">Address</Label>
+                <Textarea
+                  id="address"
+                  value={settings.address}
+                  onChange={(e) => handleInputChange("address", e.target.value)}
+                  rows={2}
+                  placeholder="Enter gym address"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={settings.description}
+                  onChange={(e) => handleInputChange("description", e.target.value)}
+                  rows={3}
+                  placeholder="Brief description of your gym"
+                  className="mt-1"
+                />
+              </div>
             </div>
-            <div>
-              <Label htmlFor="website">Website</Label>
-              <Input
-                id="website"
-                value={settings.website}
-                onChange={(e) => handleInputChange("website", e.target.value)}
-                placeholder="https://www.gym.com"
-              />
-            </div>
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={settings.description}
-                onChange={(e) => handleInputChange("description", e.target.value)}
-                rows={3}
-                placeholder="Brief description of your gym"
-              />
-            </div>
-            <div>
-              <Label htmlFor="currency">Currency</Label>
-              <select
-                id="currency"
-                value={settings.currency_id}
-                onChange={(e) => handleInputChange("currency_id", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="">Select Currency</option>
-                {currencies.map((currency) => (
-                  <option key={currency.id} value={currency.id}>
-                    {currency.name} ({currency.symbol})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

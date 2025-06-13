@@ -5,33 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Search,
-  Download,
-  Edit,
-  Trash2,
-  Eye,
-  Users,
-  Shield,
-  Mail,
-  Loader2,
-  Plus,
-  Star,
-  MoreHorizontal,
-} from "lucide-react"
+import { Search, Download, Edit, Trash2, Eye, Users, Shield, Mail, Loader2, Plus, Star, Calendar } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { InviteManagerModal } from "@/components/managers/invite-manager-modal"
 import { supabase } from "@/lib/supabase"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useGymContext } from "@/lib/gym-context"
 import type { Trainer } from "@/types/gym"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
 
 interface StaffMember {
   id: string
@@ -113,17 +93,18 @@ export default function StaffPage() {
       const { data: staffData, error: staffError } = await supabase
         .from("users")
         .select(`
-         id,
-         name,
-         email,
-         phone,
-         is_active,
-         created_at,
-         role:roles(name),
-         subaccount:subaccounts(id, name, location),
-         user_accounts!inner(is_owner)
-       `)
+          id,
+          name,
+          email,
+          phone,
+          is_active,
+          created_at,
+          role:roles(name),
+          subaccount:subaccounts(id, name, location),
+          user_accounts!inner(is_owner)
+        `)
         .eq("subaccount_id", currentSubaccountId)
+      // Removed the .neq("id", user.id) filter to include current user
 
       if (staffError) {
         console.error("Error loading staff:", staffError)
@@ -141,22 +122,31 @@ export default function StaffPage() {
       const { data: invitationsData, error: invitationsError } = await supabase
         .from("user_invitations")
         .select(`
-         id,
-         email,
-         invited_at,
-         role:roles(name),
-         subaccount:subaccounts(name, location),
-         status:status(name)
-       `)
+          id,
+          email,
+          invited_at,
+          role:roles(name),
+          subaccount:subaccounts(name, location),
+          status:status(name)
+        `)
         .eq("subaccount_id", currentSubaccountId)
-        .in("status.name", ["pending", "sent"])
+        .in("status.name", ["pending", "sent"]) // Only show pending/sent, not accepted/completed
         .neq("status.name", "accepted")
         .neq("status.name", "completed")
         .neq("status.name", "used")
 
+      console.log("Invitations data:", invitationsData) // Debug log to see what we're getting
+
       if (invitationsError) {
         console.error("Error loading invitations:", invitationsError)
       } else {
+        console.log(
+          "All invitations with status:",
+          invitationsData?.map((inv) => ({
+            email: inv.email,
+            status: inv.status?.name,
+          })),
+        )
         setInvitations(invitationsData || [])
       }
     } catch (err) {
@@ -326,36 +316,7 @@ export default function StaffPage() {
       accessorKey: "created_at",
       cell: ({ row }: any) =>
         row.original.created_at ? new Date(row.original.created_at).toLocaleDateString() : "N/A",
-    },
-    {
-      header: "Actions",
-      id: "actions",
-      cell: ({ row }: any) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem>
-              <Eye className="mr-2 h-4 w-4" />
-              View Details
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit Staff
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Remove Staff
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
+    }
   ]
 
   if (loading) {

@@ -13,8 +13,8 @@ import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import { useGymContext } from "@/lib/gym-context"
 import { Upload, FileText, CheckCircle, XCircle, Download, Loader2, ArrowRight } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { getCurrentUser, createMember } from "@/lib/supabase-queries"
+import { supabase } from "@/lib/supabase-queries"
+import { getCurrentUser } from "@/lib/supabase-queries"
 
 interface ImportMembersModalProps {
   open: boolean
@@ -48,6 +48,9 @@ interface ImportJob {
 const REQUIRED_FIELDS = ["name"]
 const OPTIONAL_FIELDS = ["email", "phone", "gender", "dob", "join_date", "is_active", "notes"]
 const ALL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]
+
+// Check if we're in production mode
+const isProduction = process.env.NODE_ENV === "production"
 
 export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportMembersModalProps) {
   const { currentSubaccountId } = useGymContext()
@@ -270,36 +273,10 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
   const createMemberImport = async (data: any) => {
     try {
       console.log("Creating member import with data:", data)
-
-      // Try to create the import record with multiple fallback strategies
-      const importData = { ...data }
-
-      // Strategy 1: Try without file_url
-      const { data: result, error } = await supabase.from("member_imports").insert(importData).select().single()
+      const { data: result, error } = await supabase.from("member_imports").insert(data).select().single()
 
       if (error) {
-        console.error("Error creating member import (attempt 1):", error)
-
-        // Strategy 2: If file_url is still required, provide an empty string
-        if (error.message.includes("file_url") && error.message.includes("not-null")) {
-          console.log("Trying with empty file_url...")
-          importData.file_url = ""
-
-          const { data: result2, error: error2 } = await supabase
-            .from("member_imports")
-            .insert(importData)
-            .select()
-            .single()
-
-          if (error2) {
-            console.error("Error creating member import (attempt 2):", error2)
-            throw new Error(`Failed to create import record: ${error2.message}`)
-          }
-
-          console.log("Member import created successfully (with empty file_url):", result2)
-          return result2
-        }
-
+        console.error("Error creating member import:", error)
         throw new Error(`Failed to create import record: ${error.message}`)
       }
 
@@ -311,69 +288,174 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
     }
   }
 
-  // Helper function to update a member import record
-  const updateMemberImport = async (id: string, data: any) => {
+  // Process the import data directly in the frontend as a fallback
+  const processImportDataLocally = async (
+    importId: string,
+    allRows: any[][],
+    headers: string[],
+    mapping: ColumnMapping,
+    subaccountId: string,
+  ) => {
     try {
-      const { error } = await supabase.from("member_imports").update(data).eq("id", id)
+      console.log("Starting local processing...")
+      // Update status to processing
+      await supabase.from("member_imports").update({ status: "processing" }).eq("id", importId)
 
-      if (error) {
-        console.error("Error updating member import:", error)
-        throw new Error(`Failed to update import record: ${error.message}`)
+      const totalRows = allRows.length
+      let processedRows = 0
+      let successCount = 0
+      let errorCount = 0
+      const logs: string[] = []
+
+      // Process rows in batches
+      const batchSize = 5
+      for (let i = 0; i < totalRows; i += batchSize) {
+        const endIndex = Math.min(i + batchSize, totalRows)
+        const batch = allRows.slice(i, endIndex)
+
+        for (let j = 0; j < batch.length; j++) {
+          const rowIndex = i + j
+          const row = batch[j]
+
+          try {
+            const memberData: any = {
+              subaccount_id: subaccountId,
+              is_active: true, // Default value
+              join_date: new Date().toISOString().split("T")[0], // Default to today
+            }
+
+            // Map the row data to member fields
+            Object.entries(mapping).forEach(([columnIndex, fieldName]) => {
+              if (fieldName && fieldName !== "skip") {
+                const value = row[Number.parseInt(columnIndex)]
+                if (value && value.trim()) {
+                  if (fieldName === "is_active") {
+                    // Convert various formats to boolean
+                    const lowerValue = value.toLowerCase().trim()
+                    memberData[fieldName] =
+                      lowerValue === "true" || lowerValue === "1" || lowerValue === "yes" || lowerValue === "active"
+                  } else if (fieldName === "dob" || fieldName === "join_date") {
+                    // Handle date fields
+                    try {
+                      const date = new Date(value)
+                      if (!isNaN(date.getTime())) {
+                        memberData[fieldName] = date.toISOString().split("T")[0]
+                      }
+                    } catch (e) {
+                      // Invalid date, skip
+                    }
+                  } else {
+                    memberData[fieldName] = value.trim()
+                  }
+                }
+              }
+            })
+
+            // Validate required fields
+            if (!memberData.name || memberData.name.trim() === "") {
+              throw new Error("Name is required")
+            }
+
+            // Create the member
+            const { data, error } = await supabase.from("members").insert(memberData).select().single()
+            if (error) throw error
+
+            successCount++
+            logs.push(`Row ${rowIndex + 1}: Member imported successfully`)
+          } catch (error) {
+            errorCount++
+            logs.push(`Row ${rowIndex + 1}: ${error instanceof Error ? error.message : "Unknown error"}`)
+          }
+        }
+
+        processedRows = endIndex
+
+        // Update progress
+        await supabase
+          .from("member_imports")
+          .update({
+            processed_rows: processedRows,
+            success_count: successCount,
+            error_count: errorCount,
+            logs: logs,
+          })
+          .eq("id", importId)
+
+        // Add a small delay to prevent overwhelming the database
+        await new Promise((resolve) => setTimeout(resolve, 500))
       }
 
-      return true
+      // Mark as completed
+      await supabase
+        .from("member_imports")
+        .update({
+          status: "completed",
+          processed_rows: processedRows,
+          success_count: successCount,
+          error_count: errorCount,
+          logs: logs,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", importId)
+
+      console.log("Local processing completed successfully")
     } catch (error) {
-      console.error("Error in updateMemberImport:", error)
-      throw error
+      console.error("Error in local processing:", error)
+      await supabase
+        .from("member_imports")
+        .update({
+          status: "failed",
+          logs: ["Processing failed due to an internal error"],
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", importId)
     }
   }
 
-  // Helper function to process a single row and create a member
-  const processRow = async (rowData: any[], headers: string[], mapping: ColumnMapping, subaccountId: string) => {
+  // Call the Edge Function to process the import
+  const callEdgeFunction = async (importId: string) => {
     try {
-      const memberData: any = {
-        subaccount_id: subaccountId,
-        is_active: true, // Default value
-        join_date: new Date().toISOString().split("T")[0], // Default to today
+      console.log("Calling Edge Function to process import...")
+      const session = await supabase.auth.getSession()
+      const accessToken = session.data.session?.access_token
+
+      if (!accessToken) {
+        throw new Error("No access token available")
       }
 
-      // Map the row data to member fields
-      Object.entries(mapping).forEach(([columnIndex, fieldName]) => {
-        if (fieldName && fieldName !== "skip") {
-          const value = rowData[Number.parseInt(columnIndex)]
-          if (value && value.trim()) {
-            if (fieldName === "is_active") {
-              // Convert various formats to boolean
-              const lowerValue = value.toLowerCase().trim()
-              memberData[fieldName] =
-                lowerValue === "true" || lowerValue === "1" || lowerValue === "yes" || lowerValue === "active"
-            } else if (fieldName === "dob" || fieldName === "join_date") {
-              // Handle date fields
-              try {
-                const date = new Date(value)
-                if (!isNaN(date.getTime())) {
-                  memberData[fieldName] = date.toISOString().split("T")[0]
-                }
-              } catch (e) {
-                // Invalid date, skip
-              }
-            } else {
-              memberData[fieldName] = value.trim()
-            }
-          }
-        }
+      // Get the Supabase URL from the environment
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+      if (!supabaseUrl) {
+        throw new Error("Supabase URL not available")
+      }
+
+      const edgeFunctionUrl = `${supabaseUrl}/functions/v1/process-member-import`
+      console.log("Edge Function URL:", edgeFunctionUrl)
+
+      const response = await fetch(edgeFunctionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          importId: importId,
+        }),
       })
 
-      // Validate required fields
-      if (!memberData.name || memberData.name.trim() === "") {
-        throw new Error("Name is required")
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Edge function error response:", response.status, errorData)
+        throw new Error(`Edge function returned status ${response.status}`)
       }
 
-      // Create the member
-      await createMember(memberData)
-      return { success: true, error: null }
+      const responseData = await response.json()
+      console.log("Edge function response:", responseData)
+      return true
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+      console.error("Edge function error:", error)
+      throw error
     }
   }
 
@@ -392,15 +474,40 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
 
       console.log("Starting import process...")
 
-      // 1. Create an import job record in the database
+      // 1. Upload the file to Supabase Storage
+      const fileName = `${Date.now()}_${file.name}`
+      const filePath = `${fileName}`
+
+      console.log("Uploading file to storage:", filePath)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("member-imports")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        })
+
+      if (uploadError) {
+        console.error("Upload error:", uploadError)
+        throw new Error(`Failed to upload file: ${uploadError.message}`)
+      }
+
+      console.log("File uploaded successfully:", uploadData)
+
+      // 2. Get the public URL for the uploaded file
+      const { data: publicUrlData } = supabase.storage.from("member-imports").getPublicUrl(filePath)
+
+      const fileUrl = publicUrlData.publicUrl
+      console.log("File public URL:", fileUrl)
+
+      // 3. Create an import job record in the database
       const importData = {
         subaccount_id: currentSubaccountId,
         uploaded_by: user.id,
         file_name: file.name,
+        file_url: fileUrl,
         status: "pending",
         total_rows: previewData.allRows.length,
         column_mapping: columnMapping,
-        // Note: file_url is intentionally omitted - it should be nullable now
       }
 
       console.log("Creating import job with data:", importData)
@@ -413,7 +520,7 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
 
       console.log("Import job created:", importJobData)
 
-      // 2. Set the import job in state to start polling
+      // 4. Set the import job in state to start polling
       setImportJob({
         id: importJobData.id,
         status: importJobData.status,
@@ -426,13 +533,44 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         file_name: file.name,
       })
 
-      // 3. Start processing the data directly
-      processImportData(importJobData.id, previewData.allRows, previewData.headers, columnMapping, currentSubaccountId)
-
-      toast({
-        title: "Import started",
-        description: "Your data is being processed. You can monitor the progress here.",
-      })
+      // 5. Process the data - use Edge Function in production, local processing in development
+      if (isProduction) {
+        try {
+          // Try to use the Edge Function in production
+          await callEdgeFunction(importJobData.id)
+          toast({
+            title: "Import started",
+            description: "Your data is being processed by the Edge Function. You can monitor the progress here.",
+          })
+        } catch (edgeFunctionError) {
+          console.error("Edge function error:", edgeFunctionError)
+          toast({
+            title: "Edge Function unavailable",
+            description: "Falling back to local processing. This might take longer.",
+          })
+          // Fall back to local processing if the Edge Function fails
+          processImportDataLocally(
+            importJobData.id,
+            previewData.allRows,
+            previewData.headers,
+            columnMapping,
+            currentSubaccountId,
+          )
+        }
+      } else {
+        // In development, just use local processing
+        toast({
+          title: "Import started",
+          description: "Your data is being processed locally. You can monitor the progress here.",
+        })
+        processImportDataLocally(
+          importJobData.id,
+          previewData.allRows,
+          previewData.headers,
+          columnMapping,
+          currentSubaccountId,
+        )
+      }
     } catch (error) {
       console.error("Import error:", error)
       toast({
@@ -441,85 +579,6 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         variant: "destructive",
       })
       setIsProcessing(false)
-    }
-  }
-
-  // Process the import data directly without storage
-  const processImportData = async (
-    importId: string,
-    allRows: any[][],
-    headers: string[],
-    mapping: ColumnMapping,
-    subaccountId: string,
-  ) => {
-    try {
-      // Update status to processing
-      await updateMemberImport(importId, { status: "processing" })
-
-      const totalRows = allRows.length
-      let processedRows = 0
-      let successCount = 0
-      let errorCount = 0
-      const logs: string[] = []
-
-      // Process rows in batches
-      const batchSize = 5
-      const processBatch = async () => {
-        if (processedRows >= totalRows) {
-          // All rows processed, update final status
-          await updateMemberImport(importId, {
-            status: "completed",
-            processed_rows: processedRows,
-            success_count: successCount,
-            error_count: errorCount,
-            logs: logs,
-            completed_at: new Date().toISOString(),
-          })
-          return
-        }
-
-        // Process a batch of rows
-        const endIndex = Math.min(processedRows + batchSize, totalRows)
-        const batch = allRows.slice(processedRows, endIndex)
-
-        for (let i = 0; i < batch.length; i++) {
-          const rowIndex = processedRows + i
-          const row = batch[i]
-
-          const result = await processRow(row, headers, mapping, subaccountId)
-
-          if (result.success) {
-            successCount++
-            logs.push(`Row ${rowIndex + 1}: Member imported successfully`)
-          } else {
-            errorCount++
-            logs.push(`Row ${rowIndex + 1}: ${result.error}`)
-          }
-        }
-
-        processedRows = endIndex
-
-        // Update progress
-        await updateMemberImport(importId, {
-          processed_rows: processedRows,
-          success_count: successCount,
-          error_count: errorCount,
-          logs: logs,
-        })
-
-        // Continue processing after a short delay
-        setTimeout(processBatch, 1000)
-      }
-
-      // Start processing
-      setTimeout(processBatch, 1000)
-    } catch (error) {
-      console.error("Error in processImportData:", error)
-      await updateMemberImport(importId, {
-        status: "failed",
-        logs: ["Processing failed due to an internal error"],
-        completed_at: new Date().toISOString(),
-      })
     }
   }
 

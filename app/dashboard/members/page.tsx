@@ -29,13 +29,7 @@ import {
   Filter,
   Upload,
 } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/currency"
@@ -177,41 +171,6 @@ export default function MembersPage() {
     router.push(`/dashboard/members/${member.id}`)
   }
 
-  const handleDeleteMember = async (member: Member) => {
-    if (!confirm(`Are you sure you want to delete ${member.name}? This action cannot be undone.`)) {
-      return
-    }
-
-    try {
-      const { error } = await supabase.from("members").delete().eq("id", member.id)
-
-      if (error) {
-        console.error("Error deleting member:", error)
-        toast({
-          title: "Error",
-          description: "Failed to delete member",
-          variant: "destructive",
-        })
-        return
-      }
-
-      toast({
-        title: "Success",
-        description: "Member deleted successfully",
-      })
-
-      loadMembers()
-      loadMonthlyRevenue()
-    } catch (error) {
-      console.error("Error deleting member:", error)
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      })
-    }
-  }
-
   const columns = [
     {
       header: "Member",
@@ -314,7 +273,6 @@ export default function MembersPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -331,8 +289,7 @@ export default function MembersPage() {
               <CreditCard className="mr-2 h-4 w-4" />
               Add Payment
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteMember(row.original)}>
+            <DropdownMenuItem className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Member
             </DropdownMenuItem>
