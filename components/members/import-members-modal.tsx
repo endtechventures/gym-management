@@ -49,9 +49,6 @@ const REQUIRED_FIELDS = ["name"]
 const OPTIONAL_FIELDS = ["email", "phone", "gender", "dob", "join_date", "is_active", "notes"]
 const ALL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]
 
-// Check if we're in production mode
-const isProduction = process.env.NODE_ENV === "production"
-
 export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportMembersModalProps) {
   const { currentSubaccountId } = useGymContext()
   const { toast } = useToast()
@@ -288,8 +285,8 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
     }
   }
 
-  // Process the import data directly in the frontend as a fallback
-  const processImportDataLocally = async (
+  // Process the import data directly in the frontend
+  const processImportData = async (
     importId: string,
     allRows: any[][],
     headers: string[],
@@ -412,53 +409,6 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
     }
   }
 
-  // Call the Edge Function to process the import
-  const callEdgeFunction = async (importId: string) => {
-    try {
-      console.log("Calling Edge Function to process import...")
-      const session = await supabase.auth.getSession()
-      const accessToken = session.data.session?.access_token
-
-      if (!accessToken) {
-        throw new Error("No access token available")
-      }
-
-      // Get the Supabase URL from the environment
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-
-      if (!supabaseUrl) {
-        throw new Error("Supabase URL not available")
-      }
-
-      const edgeFunctionUrl = `${supabaseUrl}/functions/v1/process-member-import`
-      console.log("Edge Function URL:", edgeFunctionUrl)
-
-      const response = await fetch(edgeFunctionUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          importId: importId,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        console.error("Edge function error response:", response.status, errorData)
-        throw new Error(`Edge function returned status ${response.status}`)
-      }
-
-      const responseData = await response.json()
-      console.log("Edge function response:", responseData)
-      return true
-    } catch (error) {
-      console.error("Edge function error:", error)
-      throw error
-    }
-  }
-
   const startImport = async () => {
     if (!file || !currentSubaccountId || !validateMapping() || !previewData) return
 
@@ -533,44 +483,13 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         file_name: file.name,
       })
 
-      // 5. Process the data - use Edge Function in production, local processing in development
-      if (isProduction) {
-        try {
-          // Try to use the Edge Function in production
-          await callEdgeFunction(importJobData.id)
-          toast({
-            title: "Import started",
-            description: "Your data is being processed by the Edge Function. You can monitor the progress here.",
-          })
-        } catch (edgeFunctionError) {
-          console.error("Edge function error:", edgeFunctionError)
-          toast({
-            title: "Edge Function unavailable",
-            description: "Falling back to local processing. This might take longer.",
-          })
-          // Fall back to local processing if the Edge Function fails
-          processImportDataLocally(
-            importJobData.id,
-            previewData.allRows,
-            previewData.headers,
-            columnMapping,
-            currentSubaccountId,
-          )
-        }
-      } else {
-        // In development, just use local processing
-        toast({
-          title: "Import started",
-          description: "Your data is being processed locally. You can monitor the progress here.",
-        })
-        processImportDataLocally(
-          importJobData.id,
-          previewData.allRows,
-          previewData.headers,
-          columnMapping,
-          currentSubaccountId,
-        )
-      }
+      // 5. Process the data locally
+      toast({
+        title: "Import started",
+        description: "Your data is being processed. You can monitor the progress here.",
+      })
+
+      processImportData(importJobData.id, previewData.allRows, previewData.headers, columnMapping, currentSubaccountId)
     } catch (error) {
       console.error("Import error:", error)
       toast({
