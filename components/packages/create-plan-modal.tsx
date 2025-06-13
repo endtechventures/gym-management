@@ -1,6 +1,11 @@
 "use client"
 
-import type React from "react"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
+import { toast } from "sonner"
 
 import {
   AlertDialog,
@@ -10,20 +15,15 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { useState } from "react"
-import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 import { getCurrencySymbol } from "@/lib/currency"
+import { useGymContext } from "@/lib/gym-context"
+import { supabase } from "@/lib/supabase-queries"
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -41,16 +41,28 @@ const formSchema = z.object({
       message: "Price must be a valid number greater than 0.",
     },
   ),
+  duration: z.string().refine(
+    (value) => {
+      const num = Number(value)
+      return !isNaN(num) && num > 0
+    },
+    {
+      message: "Duration must be a valid number greater than 0.",
+    },
+  ),
   type: z.enum(["basic", "standard", "premium"]),
 })
 
 interface CreatePlanModalProps {
-  children: React.ReactNode
+  open: boolean
+  onClose: () => void
+  onPlanCreated?: () => void
 }
 
-export function CreatePlanModal({ children }: CreatePlanModalProps) {
-  const [open, setOpen] = useState(false)
+export function CreatePlanModal({ open, onClose, onPlanCreated }: CreatePlanModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
+  const { currentSubaccountId } = useGymContext()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -58,32 +70,62 @@ export function CreatePlanModal({ children }: CreatePlanModalProps) {
       name: "",
       description: "",
       price: "",
+      duration: "30", // Default to 30 days
       type: "basic",
     },
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      const response = await fetch("/api/packages", {
-        method: "POST",
-        body: JSON.stringify(values),
-      })
+    if (!currentSubaccountId) {
+      toast.error("No franchise selected")
+      return
+    }
 
-      if (response.ok) {
-        toast.success("Package created successfully!")
-        router.refresh()
-        setOpen(false)
-      } else {
-        toast.error("Something went wrong!")
+    try {
+      setIsSubmitting(true)
+      console.log("Creating plan with values:", values)
+
+      const { data, error } = await supabase
+        .from("plans")
+        .insert({
+          subaccount_id: currentSubaccountId,
+          name: values.name,
+          description: values.description,
+          price: Number.parseFloat(values.price),
+          duration: Number.parseInt(values.duration),
+          is_active: true,
+          metadata: { type: values.type },
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("Error creating plan:", error)
+        toast.error("Failed to create plan: " + error.message)
+        return
       }
+
+      toast.success("Plan created successfully!")
+
+      // Call the onPlanCreated callback if provided
+      if (onPlanCreated) {
+        onPlanCreated()
+      } else {
+        router.refresh()
+      }
+
+      onClose()
+      form.reset()
     } catch (error) {
+      console.error("Error creating plan:", error)
       toast.error("Something went wrong!")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={onClose}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Create new plan</AlertDialogTitle>
@@ -98,7 +140,7 @@ export function CreatePlanModal({ children }: CreatePlanModalProps) {
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Package name" {...field} />
+                    <Input placeholder="Plan name" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -111,25 +153,40 @@ export function CreatePlanModal({ children }: CreatePlanModalProps) {
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Describe package benefits" {...field} />
+                    <Textarea placeholder="Describe plan benefits" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="price"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel htmlFor="price">Price ({getCurrencySymbol()}) *</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="0.00" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="price"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel htmlFor="price">Price ({getCurrencySymbol()}) *</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="0.00" step="0.01" min="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="duration"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel htmlFor="duration">Duration (days) *</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="30" min="1" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
               name="type"
@@ -153,8 +210,10 @@ export function CreatePlanModal({ children }: CreatePlanModalProps) {
               )}
             />
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <Button type="submit">Create</Button>
+              <AlertDialogCancel onClick={onClose}>Cancel</AlertDialogCancel>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create"}
+              </Button>
             </AlertDialogFooter>
           </form>
         </Form>
