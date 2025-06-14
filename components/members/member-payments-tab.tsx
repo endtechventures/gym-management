@@ -241,8 +241,8 @@ export function MemberPaymentsTab({ member, onPaymentAdded, onClose, isNewMember
         </Card>
       </div>
 
-      {/* Next Payment Actions - Only show for existing members */}
-      {!isNewMember && member.active_plan && member.next_payment && activePlan && (
+      {/* Next Payment Actions - Only show for existing members who have made payments */}
+      {!isNewMember && member.active_plan && member.next_payment && activePlan && payments.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Next Payment Due</CardTitle>

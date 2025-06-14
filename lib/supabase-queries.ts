@@ -368,5 +368,27 @@ export async function getMemberImportById(importId: string) {
     throw error
   }
 }
+// Update member's next payment date
+export async function updateMemberNextPayment(memberId: string, nextPaymentDate: string, planId?: string) {
+  try {
+    const updateData: any = {
+      next_payment: nextPaymentDate,
+      last_payment: new Date().toISOString().split("T")[0],
+    }
+
+    // If a plan is provided, also update the active plan
+    if (planId) {
+      updateData.active_plan = planId
+    }
+
+    const { data, error } = await supabase.from("members").update(updateData).eq("id", memberId).select().single()
+
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error("Error updating member next payment:", error)
+    throw error
+  }
+}
 // Export the supabase client for direct use
 export { supabase }

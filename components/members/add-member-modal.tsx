@@ -94,7 +94,8 @@ export function AddMemberModal({ open, onClose, onMemberAdded }: AddMemberModalP
         join_date: memberData.join_date,
         is_active: true,
         active_plan: memberData.selected_plan_id || null,
-        next_payment: selectedPlan ? calculateNextPaymentDate(memberData.join_date, selectedPlan.duration) : null,
+        // Case 1: If plan is selected but no payment made yet, next_payment = join_date
+        next_payment: selectedPlan ? memberData.join_date : null,
       }
 
       const member = await createMember(memberPayload)
@@ -272,7 +273,7 @@ export function AddMemberModal({ open, onClose, onMemberAdded }: AddMemberModalP
                     <p className="text-lg font-bold text-green-600">${selectedPlan.price}</p>
                     <p className="text-sm text-gray-500">Duration: {selectedPlan.duration} days</p>
                     <p className="text-sm text-gray-500">
-                      Next Payment Due: {calculateNextPaymentDate(memberData.join_date, selectedPlan.duration)}
+                      Next Payment Due: {memberData.join_date} (Payment due on join date)
                     </p>
                   </div>
                 )}

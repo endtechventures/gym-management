@@ -12,8 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import { useGymContext } from "@/lib/gym-context"
-import { Upload, FileText, CheckCircle, XCircle, Download, Loader2, ArrowRight } from "lucide-react"
-import { supabase } from "@/lib/supabase-queries"
+import { Upload, FileText, CheckCircle, XCircle, Download, Loader2, ArrowRight, Calendar } from "lucide-react"
+import { supabase, getPlans } from "@/lib/supabase-queries"
 import { getCurrentUser } from "@/lib/supabase-queries"
 
 interface ImportMembersModalProps {
@@ -45,9 +45,108 @@ interface ImportJob {
   file_name?: string
 }
 
+interface Plan {
+  id: string
+  name: string
+  duration_days: number
+  price: number
+}
+
+interface DateFormat {
+  value: string
+  label: string
+  example: string
+  regex: RegExp
+}
+
 const REQUIRED_FIELDS = ["name"]
-const OPTIONAL_FIELDS = ["email", "phone", "gender", "dob", "join_date", "is_active", "notes"]
+const OPTIONAL_FIELDS = [
+  "email",
+  "phone",
+  "gender",
+  "dob",
+  "join_date",
+  "is_active",
+  "active_plan",
+  "last_payment",
+  "next_payment",
+]
 const ALL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]
+
+const DATE_FORMATS: DateFormat[] = [
+  {
+    value: "dd/mm/yyyy",
+    label: "DD/MM/YYYY",
+    example: "25/12/2024",
+    regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+  },
+  {
+    value: "dd/mm/yy",
+    label: "DD/MM/YY",
+    example: "25/12/24",
+    regex: /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,
+  },
+  {
+    value: "mm/dd/yyyy",
+    label: "MM/DD/YYYY",
+    example: "12/25/2024",
+    regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+  },
+  {
+    value: "mm/dd/yy",
+    label: "MM/DD/YY",
+    example: "12/25/24",
+    regex: /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,
+  },
+  {
+    value: "yyyy/mm/dd",
+    label: "YYYY/MM/DD",
+    example: "2024/12/25",
+    regex: /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
+  },
+  {
+    value: "yyyy/dd/mm",
+    label: "YYYY/DD/MM",
+    example: "2024/25/12",
+    regex: /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/,
+  },
+  {
+    value: "dd-mm-yyyy",
+    label: "DD-MM-YYYY",
+    example: "25-12-2024",
+    regex: /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+  },
+  {
+    value: "dd-mm-yy",
+    label: "DD-MM-YY",
+    example: "25-12-24",
+    regex: /^(\d{1,2})-(\d{1,2})-(\d{2})$/,
+  },
+  {
+    value: "mm-dd-yyyy",
+    label: "MM-DD-YYYY",
+    example: "12-25-2024",
+    regex: /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+  },
+  {
+    value: "mm-dd-yy",
+    label: "MM-DD-YY",
+    example: "12-25-24",
+    regex: /^(\d{1,2})-(\d{1,2})-(\d{2})$/,
+  },
+  {
+    value: "yyyy-mm-dd",
+    label: "YYYY-MM-DD",
+    example: "2024-12-25",
+    regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+  },
+  {
+    value: "yyyy-dd-mm",
+    label: "YYYY-DD-MM",
+    example: "2024-25-12",
+    regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+  },
+]
 
 export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportMembersModalProps) {
   const { currentSubaccountId } = useGymContext()
@@ -55,12 +154,30 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const [step, setStep] = useState<"upload" | "preview" | "mapping" | "importing">("upload")
+  const [step, setStep] = useState<"upload" | "preview" | "mapping" | "dateformat" | "importing">("upload")
   const [file, setFile] = useState<File | null>(null)
   const [previewData, setPreviewData] = useState<PreviewData | null>(null)
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({})
+  const [selectedDateFormat, setSelectedDateFormat] = useState<string>("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [importJob, setImportJob] = useState<ImportJob | null>(null)
+  const [plans, setPlans] = useState<Plan[]>([])
+
+  // Load plans for mapping reference
+  useEffect(() => {
+    if (currentSubaccountId && open) {
+      loadPlans()
+    }
+  }, [currentSubaccountId, open])
+
+  const loadPlans = async () => {
+    try {
+      const plansData = await getPlans(currentSubaccountId!)
+      setPlans(plansData || [])
+    } catch (error) {
+      console.error("Error loading plans:", error)
+    }
+  }
 
   // Clean up polling interval on unmount
   useEffect(() => {
@@ -176,9 +293,29 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         const allRows = []
         const previewRows = []
 
-        // Parse all rows
+        // Parse all rows - IMPROVED CSV PARSING
         for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(",").map((v) => v.trim().replace(/"/g, ""))
+          const line = lines[i].trim()
+          if (!line) continue // Skip empty lines
+
+          // Better CSV parsing - handle quoted values and commas within quotes
+          const values = []
+          let current = ""
+          let inQuotes = false
+
+          for (let j = 0; j < line.length; j++) {
+            const char = line[j]
+            if (char === '"') {
+              inQuotes = !inQuotes
+            } else if (char === "," && !inQuotes) {
+              values.push(current.trim().replace(/^"|"$/g, ""))
+              current = ""
+            } else {
+              current += char
+            }
+          }
+          values.push(current.trim().replace(/^"|"$/g, "")) // Add the last value
+
           allRows.push(values)
 
           // Only add first 10 rows to preview
@@ -201,14 +338,34 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
             autoMapping[index.toString()] = "phone"
           } else if (lowerHeader.includes("gender") || lowerHeader.includes("sex")) {
             autoMapping[index.toString()] = "gender"
-          } else if (lowerHeader.includes("birth") || lowerHeader.includes("dob")) {
+          } else if (
+            lowerHeader.includes("birth") ||
+            lowerHeader.includes("dob") ||
+            lowerHeader.includes("date of birth")
+          ) {
             autoMapping[index.toString()] = "dob"
-          } else if (lowerHeader.includes("join") || lowerHeader.includes("start")) {
+          } else if (
+            lowerHeader.includes("join") ||
+            lowerHeader.includes("start") ||
+            lowerHeader.includes("registration")
+          ) {
             autoMapping[index.toString()] = "join_date"
           } else if (lowerHeader.includes("active") || lowerHeader.includes("status")) {
             autoMapping[index.toString()] = "is_active"
-          } else if (lowerHeader.includes("note") || lowerHeader.includes("comment")) {
-            autoMapping[index.toString()] = "notes"
+          } else if (
+            lowerHeader.includes("plan") ||
+            lowerHeader.includes("membership") ||
+            lowerHeader.includes("package")
+          ) {
+            autoMapping[index.toString()] = "active_plan"
+          } else if (lowerHeader.includes("last payment") || lowerHeader.includes("last_payment")) {
+            autoMapping[index.toString()] = "last_payment"
+          } else if (
+            lowerHeader.includes("next payment") ||
+            lowerHeader.includes("next_payment") ||
+            lowerHeader.includes("due date")
+          ) {
+            autoMapping[index.toString()] = "next_payment"
           }
         })
 
@@ -266,12 +423,124 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
     return true
   }
 
+  // Check if any date fields are mapped
+  const hasDateFields = () => {
+    const mappedFields = Object.values(columnMapping)
+    const dateFields = ["dob", "join_date", "last_payment", "next_payment"]
+    return dateFields.some((field) => mappedFields.includes(field))
+  }
+
+  // Get sample date values from the preview data
+  const getSampleDates = () => {
+    if (!previewData) return []
+
+    const dateFields = ["dob", "join_date", "last_payment", "next_payment"]
+    const samples: string[] = []
+
+    Object.entries(columnMapping).forEach(([columnIndex, fieldName]) => {
+      if (dateFields.includes(fieldName)) {
+        const sampleValue = previewData.rows[0]?.[Number.parseInt(columnIndex)]
+        if (sampleValue && String(sampleValue).trim()) {
+          samples.push(String(sampleValue).trim())
+        }
+      }
+    })
+
+    return [...new Set(samples)] // Remove duplicates
+  }
+
+  // Helper function to find plan by name
+  const findPlanByName = (planName: string): string | null => {
+    if (!planName || !plans.length) return null
+
+    const normalizedPlanName = planName.toLowerCase().trim()
+    const matchedPlan = plans.find(
+      (plan) =>
+        plan.name.toLowerCase().trim() === normalizedPlanName ||
+        plan.name.toLowerCase().includes(normalizedPlanName) ||
+        normalizedPlanName.includes(plan.name.toLowerCase()),
+    )
+
+    return matchedPlan ? matchedPlan.id : null
+  }
+
+  // Parse date according to selected format
+  const parseDate = (dateString: string, format: string): string | null => {
+    if (!dateString || !dateString.trim()) return null
+
+    const trimmedDate = dateString.trim()
+    const formatConfig = DATE_FORMATS.find((f) => f.value === format)
+
+    if (!formatConfig) return null
+
+    const match = trimmedDate.match(formatConfig.regex)
+    if (!match) return null
+
+    let day: number, month: number, year: number
+
+    switch (format) {
+      case "dd/mm/yyyy":
+      case "dd-mm-yyyy":
+        day = Number.parseInt(match[1])
+        month = Number.parseInt(match[2])
+        year = Number.parseInt(match[3])
+        break
+      case "dd/mm/yy":
+      case "dd-mm-yy":
+        day = Number.parseInt(match[1])
+        month = Number.parseInt(match[2])
+        year = Number.parseInt(match[3]) + (Number.parseInt(match[3]) > 50 ? 1900 : 2000) // Assume 50+ is 1900s, else 2000s
+        break
+      case "mm/dd/yyyy":
+      case "mm-dd-yyyy":
+        month = Number.parseInt(match[1])
+        day = Number.parseInt(match[2])
+        year = Number.parseInt(match[3])
+        break
+      case "mm/dd/yy":
+      case "mm-dd-yy":
+        month = Number.parseInt(match[1])
+        day = Number.parseInt(match[2])
+        year = Number.parseInt(match[3]) + (Number.parseInt(match[3]) > 50 ? 1900 : 2000)
+        break
+      case "yyyy/mm/dd":
+      case "yyyy-mm-dd":
+        year = Number.parseInt(match[1])
+        month = Number.parseInt(match[2])
+        day = Number.parseInt(match[3])
+        break
+      case "yyyy/dd/mm":
+      case "yyyy-dd-mm":
+        year = Number.parseInt(match[1])
+        day = Number.parseInt(match[2])
+        month = Number.parseInt(match[3])
+        break
+      default:
+        return null
+    }
+
+    // Validate date components
+    if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+      return null
+    }
+
+    // Create date and validate it's real (handles leap years, etc.)
+    const date = new Date(year, month - 1, day)
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      return null
+    }
+
+    // Return in yyyy-mm-dd format
+    return `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`
+  }
+
   // Process the import data directly in the frontend
   const processImportData = async (
     importId: string,
     allRows: any[][],
     mapping: ColumnMapping,
     subaccountId: string,
+    dateFormat: string,
   ) => {
     try {
       // Update status to processing
@@ -283,8 +552,10 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
       let errorCount = 0
       const logs: string[] = []
 
-      // Process rows in batches
-      const batchSize = 5
+      logs.push(`Using date format: ${dateFormat}`)
+
+      // Process rows in smaller batches for better progress tracking
+      const batchSize = 3 // Reduced from 5 to 3
       for (let i = 0; i < totalRows; i += batchSize) {
         const endIndex = Math.min(i + batchSize, totalRows)
         const batch = allRows.slice(i, endIndex)
@@ -293,6 +564,9 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
           const rowIndex = i + j
           const row = batch[j]
 
+          // Add row number to logs for better debugging
+          logs.push(`--- Processing Row ${rowIndex + 1} ---`)
+
           try {
             const memberData: any = {
               subaccount_id: subaccountId,
@@ -300,32 +574,66 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
               join_date: new Date().toISOString().split("T")[0], // Default to today
             }
 
-            // Map the row data to member fields
+            // Map the row data to member fields - IMPROVED LOGIC
             Object.entries(mapping).forEach(([columnIndex, fieldName]) => {
               if (fieldName && fieldName !== "skip") {
-                const value = row[Number.parseInt(columnIndex)]
-                if (value && value.trim()) {
+                const colIndex = Number.parseInt(columnIndex)
+                const value = row[colIndex]
+
+                if (value !== undefined && value !== null && String(value).trim() !== "") {
+                  const trimmedValue = String(value).trim()
+
                   if (fieldName === "is_active") {
                     // Convert various formats to boolean
-                    const lowerValue = value.toLowerCase().trim()
+                    const lowerValue = trimmedValue.toLowerCase()
                     memberData[fieldName] =
                       lowerValue === "true" || lowerValue === "1" || lowerValue === "yes" || lowerValue === "active"
-                  } else if (fieldName === "dob" || fieldName === "join_date") {
-                    // Handle date fields
-                    try {
-                      const date = new Date(value)
-                      if (!isNaN(date.getTime())) {
-                        memberData[fieldName] = date.toISOString().split("T")[0]
-                      }
-                    } catch (e) {
-                      // Invalid date, skip
+                  } else if (
+                    fieldName === "dob" ||
+                    fieldName === "join_date" ||
+                    fieldName === "last_payment" ||
+                    fieldName === "next_payment"
+                  ) {
+                    // Handle date fields with selected format
+                    const parsedDate = parseDate(trimmedValue, dateFormat)
+                    if (parsedDate) {
+                      memberData[fieldName] = parsedDate
+                      logs.push(`Row ${rowIndex + 1}: ${fieldName} "${trimmedValue}" → ${parsedDate}`)
+                    } else {
+                      logs.push(
+                        `Row ${rowIndex + 1}: Invalid date format for ${fieldName}: "${trimmedValue}" - field skipped`,
+                      )
+                    }
+                  } else if (fieldName === "active_plan") {
+                    // Handle plan mapping - try to find plan by name
+                    const planId = findPlanByName(trimmedValue)
+                    if (planId) {
+                      memberData[fieldName] = planId
+                      logs.push(`Row ${rowIndex + 1}: Plan "${trimmedValue}" mapped to ID: ${planId}`)
+                    } else {
+                      logs.push(`Row ${rowIndex + 1}: Plan not found: "${trimmedValue}". Skipping plan assignment.`)
                     }
                   } else {
-                    memberData[fieldName] = value.trim()
+                    memberData[fieldName] = trimmedValue
+                  }
+                } else {
+                  // Log when a mapped field has no value
+                  if (fieldName !== "skip") {
+                    logs.push(`Row ${rowIndex + 1}: No value provided for ${fieldName}`)
                   }
                 }
               }
             })
+
+            // Add detailed logging for debugging
+            logs.push(
+              `Row ${rowIndex + 1}: Processing member data: ${JSON.stringify({
+                name: memberData.name,
+                next_payment: memberData.next_payment,
+                last_payment: memberData.last_payment,
+                active_plan: memberData.active_plan,
+              })}`,
+            )
 
             // Validate required fields
             if (!memberData.name || memberData.name.trim() === "") {
@@ -337,7 +645,7 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
             if (error) throw error
 
             successCount++
-            logs.push(`Row ${rowIndex + 1}: Member imported successfully`)
+            logs.push(`Row ${rowIndex + 1}: Member '${memberData.name}' imported successfully`)
           } catch (error) {
             errorCount++
             logs.push(`Row ${rowIndex + 1}: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -346,16 +654,18 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
 
         processedRows = endIndex
 
-        // Update progress
-        await supabase
-          .from("member_imports")
-          .update({
-            processed_rows: processedRows,
-            success_count: successCount,
-            error_count: errorCount,
-            logs: logs,
-          })
-          .eq("id", importId)
+        // Update progress more frequently - after every row instead of every batch
+        if (processedRows % 2 === 0 || processedRows === totalRows) {
+          await supabase
+            .from("member_imports")
+            .update({
+              processed_rows: processedRows,
+              success_count: successCount,
+              error_count: errorCount,
+              logs: logs.slice(-100), // Keep only last 100 log entries to avoid too much data
+            })
+            .eq("id", importId)
+        }
 
         // Add a small delay to prevent overwhelming the database
         await new Promise((resolve) => setTimeout(resolve, 500))
@@ -388,6 +698,12 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
 
   const startImport = async () => {
     if (!file || !currentSubaccountId || !validateMapping() || !previewData) return
+
+    // Check if we need date format selection
+    if (hasDateFields() && !selectedDateFormat) {
+      setStep("dateformat")
+      return
+    }
 
     setIsProcessing(true)
     setStep("importing")
@@ -459,7 +775,13 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
         description: "Your data is being processed. You can monitor the progress here.",
       })
 
-      processImportData(importJobData.id, previewData.allRows, columnMapping, currentSubaccountId)
+      processImportData(
+        importJobData.id,
+        previewData.allRows,
+        columnMapping,
+        currentSubaccountId,
+        selectedDateFormat || "yyyy-mm-dd",
+      )
     } catch (error) {
       console.error("Import error:", error)
       toast({
@@ -476,6 +798,7 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
     setFile(null)
     setPreviewData(null)
     setColumnMapping({})
+    setSelectedDateFormat("")
     setImportJob(null)
     setIsProcessing(false)
     if (fileInputRef.current) {
@@ -493,7 +816,7 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
 
   const downloadTemplate = () => {
     const templateContent =
-      "name,email,phone,gender,dob,join_date,is_active,notes\nJohn Doe,john@example.com,+1234567890,male,1990-01-15,2024-01-01,true,New member\nJane Smith,jane@example.com,+1234567891,female,1985-05-20,2024-01-02,true,Referred by John"
+      "name,email,phone,gender,dob,join_date,is_active,active_plan,last_payment,next_payment\nJohn Doe,john@example.com,+1234567890,male,1990-01-15,2024-01-01,true,Monthly Plan,2024-01-01,2024-02-01\nJane Smith,jane@example.com,+1234567891,female,1985-05-20,2024-01-02,true,Yearly Plan,2024-01-02,2025-01-02"
     const blob = new Blob([templateContent], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -503,6 +826,38 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+  }
+
+  const getFieldDisplayName = (fieldName: string) => {
+    const displayNames: { [key: string]: string } = {
+      name: "Name *",
+      email: "Email",
+      phone: "Phone",
+      gender: "Gender",
+      dob: "Date of Birth",
+      join_date: "Join Date",
+      is_active: "Active Status",
+      active_plan: "Active Plan",
+      last_payment: "Last Payment Date",
+      next_payment: "Next Payment Date",
+    }
+    return displayNames[fieldName] || fieldName.replace("_", " ")
+  }
+
+  const getFieldDescription = (fieldName: string) => {
+    const descriptions: { [key: string]: string } = {
+      name: "Member's full name (required)",
+      email: "Member's email address",
+      phone: "Member's phone number",
+      gender: "Member's gender (male/female/other)",
+      dob: "Date of birth",
+      join_date: "Date member joined",
+      is_active: "Active status (true/false, yes/no, active/inactive)",
+      active_plan: "Plan name (must match existing plan names)",
+      last_payment: "Last payment date",
+      next_payment: "Next payment due date",
+    }
+    return descriptions[fieldName] || ""
   }
 
   return (
@@ -524,6 +879,22 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
                 Download Template
               </Button>
             </div>
+
+            {plans.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Available Plans for Mapping:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {plans.map((plan) => (
+                    <Badge key={plan.id} variant="outline" className="bg-white">
+                      {plan.name}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-blue-700 mt-2">
+                  When mapping the "active_plan" column, use these exact plan names for automatic matching.
+                </p>
+              </div>
+            )}
 
             <div
               className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
@@ -635,11 +1006,16 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
                         <SelectItem value="skip">Don't import</SelectItem>
                         {ALL_FIELDS.map((field) => (
                           <SelectItem key={field} value={field}>
-                            {field === "name" ? "Name *" : field.replace("_", " ")}
+                            {getFieldDisplayName(field)}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {columnMapping[index.toString()] && columnMapping[index.toString()] !== "skip" && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {getFieldDescription(columnMapping[index.toString()])}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -650,6 +1026,82 @@ export function ImportMembersModal({ open, onClose, onImportCompleted }: ImportM
                 Back
               </Button>
               <Button onClick={startImport} disabled={!validateMapping() || isProcessing}>
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    {hasDateFields() ? "Next: Date Format" : "Start Import"}
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "dateformat" && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              <div>
+                <h3 className="text-lg font-medium">Date Format Selection</h3>
+                <p className="text-sm text-gray-600">
+                  Your data contains date fields. Please select the format used in your CSV file.
+                </p>
+              </div>
+            </div>
+
+            {getSampleDates().length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="font-medium text-yellow-900 mb-2">Sample dates from your file:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {getSampleDates().map((sample, index) => (
+                    <Badge key={index} variant="outline" className="bg-white">
+                      {sample}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-3">
+              {DATE_FORMATS.map((format) => (
+                <div
+                  key={format.value}
+                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                    selectedDateFormat === format.value
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => setSelectedDateFormat(format.value)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="font-medium cursor-pointer">{format.label}</Label>
+                      <p className="text-sm text-gray-500">Example: {format.example}</p>
+                    </div>
+                    <div
+                      className={`w-4 h-4 rounded-full border-2 ${
+                        selectedDateFormat === format.value ? "border-blue-500 bg-blue-500" : "border-gray-300"
+                      }`}
+                    >
+                      {selectedDateFormat === format.value && (
+                        <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep("mapping")}>
+                Back
+              </Button>
+              <Button onClick={startImport} disabled={!selectedDateFormat || isProcessing}>
                 {isProcessing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

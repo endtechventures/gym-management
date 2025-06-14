@@ -14,22 +14,7 @@ import { EditMemberModal } from "@/components/members/edit-member-modal"
 import { ImportMembersModal } from "@/components/members/import-members-modal"
 import { DataTable } from "@/components/ui/data-table"
 import type { Member } from "@/types/database"
-import {
-  Plus,
-  Search,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  CreditCard,
-  User,
-  Calendar,
-  Phone,
-  Mail,
-  ExternalLink,
-  Filter,
-  Upload,
-} from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Plus, Search, Edit, Trash2, CreditCard, User, Calendar, Phone, Mail, Filter, Upload, Eye } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/currency"
@@ -171,6 +156,35 @@ export default function MembersPage() {
     router.push(`/dashboard/members/${member.id}`)
   }
 
+  const handleDeleteMember = async (member: Member) => {
+    if (!confirm(`Are you sure you want to delete ${member.name}? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase.from("members").delete().eq("id", member.id)
+
+      if (error) {
+        throw error
+      }
+
+      toast({
+        title: "Success",
+        description: "Member deleted successfully",
+      })
+
+      loadMembers()
+      loadMonthlyRevenue()
+    } catch (error) {
+      console.error("Error deleting member:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete member",
+        variant: "destructive",
+      })
+    }
+  }
+
   const columns = [
     {
       header: "Member",
@@ -270,31 +284,44 @@ export default function MembersPage() {
       header: "Actions",
       id: "actions",
       cell: ({ row }: any) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleViewMemberDetails(row.original)}>
-              <ExternalLink className="mr-2 h-4 w-4" />
-              View Details
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleEditMember(row.original)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit Member
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleAddPayment(row.original)}>
-              <CreditCard className="mr-2 h-4 w-4" />
-              Add Payment
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Member
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleViewMemberDetails(row.original)}
+            className="h-8 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            title="View Details"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleEditMember(row.original)}
+            className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+            title="Edit Member"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleAddPayment(row.original)}
+            className="h-8 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+            title="Add Payment"
+          >
+            <CreditCard className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleDeleteMember(row.original)}
+            className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+            title="Delete Member"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ]

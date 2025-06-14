@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { useGymContext } from "@/lib/gym-context"
-import { getMembers, getPlans, getPaymentMethods, createPayment } from "@/lib/supabase-queries"
+import { getMembers, getPlans, getPaymentMethods, createPayment, updateMember } from "@/lib/supabase-queries"
 import type { Member, Plan, PaymentMethod } from "@/types/database"
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency"
 
@@ -118,6 +118,7 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
     try {
       setIsLoading(true)
 
+      // Create the payment
       await createPayment(
         {
           member_id: paymentData.member_id,
@@ -131,6 +132,32 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
         currentSubaccountId,
       )
 
+      // Handle custom payment case: If a plan was selected and it's different from member's current plan
+      // OR if member doesn't have a current plan, update the next payment date based on selected plan
+      if (paymentData.plan_id && selectedPlan && selectedMember) {
+        const currentNextPayment = selectedMember.next_payment ? new Date(selectedMember.next_payment) : new Date()
+        const newNextPayment = new Date(currentNextPayment)
+        newNextPayment.setDate(newNextPayment.getDate() + selectedPlan.duration)
+
+        // Update member with new payment info
+        await updateMember(paymentData.member_id, {
+          ...selectedMember,
+          active_plan: paymentData.plan_id, // Update active plan to the selected plan
+          last_payment: new Date().toISOString().split("T")[0],
+          next_payment: newNextPayment.toISOString().split("T")[0],
+        })
+
+        toast({
+          title: "Success",
+          description: `Payment recorded successfully. Next payment due: ${newNextPayment.toLocaleDateString()}`,
+        })
+      } else {
+        toast({
+          title: "Success",
+          description: "Payment recorded successfully",
+        })
+      }
+
       // Reset form
       setPaymentData({
         member_id: "",
@@ -141,11 +168,6 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
         final_amount: "",
         payment_method_id: "",
         notes: "",
-      })
-
-      toast({
-        title: "Success",
-        description: "Payment recorded successfully",
       })
 
       onPaymentAdded()
@@ -226,6 +248,16 @@ export function AddPaymentModal({ open, onClose, onPaymentAdded, preselectedMemb
                   <span>Duration:</span>
                   <span>{selectedPlan.duration} days</span>
                 </div>
+                {selectedMember && selectedMember.next_payment && (
+                  <div className="mt-2 p-2 bg-blue-50 rounded">
+                    <p className="text-sm text-blue-700">
+                      <strong>Next payment will be:</strong>{" "}
+                      {new Date(
+                        new Date(selectedMember.next_payment).getTime() + selectedPlan.duration * 24 * 60 * 60 * 1000,
+                      ).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
